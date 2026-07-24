@@ -11,6 +11,7 @@ $specFile = Join-Path $repositoryRoot "packaging\local_clip_ai.spec"
 $applicationDirectory = Join-Path $repositoryRoot "dist\LocalClipAI"
 $archivePath = Join-Path $repositoryRoot "dist\LocalClipAI-Windows-Beta.zip"
 $checksumPath = "$archivePath.sha256"
+$packageSmokeRuntime = Join-Path $repositoryRoot "build\package-smoke-runtime"
 
 if (-not (Test-Path -LiteralPath $pythonExecutable)) {
     throw "The development environment is missing. Run .\scripts\bootstrap.ps1 first."
@@ -18,10 +19,24 @@ if (-not (Test-Path -LiteralPath $pythonExecutable)) {
 
 Set-Location -LiteralPath $repositoryRoot
 & $pythonExecutable -m pip install -e ".[dev,transcription,gpu,packaging]"
+if ($LASTEXITCODE -ne 0) {
+    throw "Dependency preparation failed."
+}
 
 if (-not $SkipTests) {
     & $pythonExecutable -m ruff check .
+    if ($LASTEXITCODE -ne 0) {
+        throw "Ruff validation failed."
+    }
     & $pythonExecutable -m pytest -q
+    if ($LASTEXITCODE -ne 0) {
+        throw "Test validation failed."
+    }
+}
+
+& $pythonExecutable -m local_clip_ai --data-dir ".local-data" install-tools
+if ($LASTEXITCODE -ne 0) {
+    throw "Portable media-tool preparation failed."
 }
 
 & $pythonExecutable -m PyInstaller `
@@ -30,9 +45,48 @@ if (-not $SkipTests) {
     --distpath (Join-Path $repositoryRoot "dist") `
     --workpath (Join-Path $repositoryRoot "build\pyinstaller") `
     $specFile
+if ($LASTEXITCODE -ne 0) {
+    throw "PyInstaller failed."
+}
 
 if (-not (Test-Path -LiteralPath (Join-Path $applicationDirectory "LocalClipAI.exe"))) {
     throw "PyInstaller completed without producing LocalClipAI.exe."
+}
+
+$requiredBundledExecutables = @(
+    (Join-Path $applicationDirectory "_internal\bundled_tools\ffmpeg\bin\ffmpeg.exe"),
+    (Join-Path $applicationDirectory "_internal\bundled_tools\ffmpeg\bin\ffprobe.exe"),
+    (Join-Path $applicationDirectory "_internal\bundled_tools\yt-dlp\yt-dlp.exe")
+)
+foreach ($requiredExecutable in $requiredBundledExecutables) {
+    if (-not (Test-Path -LiteralPath $requiredExecutable)) {
+        throw "The package is missing a bundled media tool: $requiredExecutable"
+    }
+}
+
+if (Test-Path -LiteralPath $packageSmokeRuntime) {
+    Remove-Item -LiteralPath $packageSmokeRuntime -Recurse -Force
+}
+$diagnosticProcess = Start-Process `
+    -FilePath (Join-Path $applicationDirectory "LocalClipAI.exe") `
+    -ArgumentList @(
+        "--worker-cli",
+        "--data-dir",
+        "`"$packageSmokeRuntime`"",
+        "diagnose",
+        "--strict"
+    ) `
+    -WindowStyle Hidden `
+    -Wait `
+    -PassThru
+if ($diagnosticProcess.ExitCode -ne 0) {
+    throw "Packaged diagnostics failed against a clean runtime directory."
+}
+if (-not (Test-Path -LiteralPath $packageSmokeRuntime)) {
+    throw "Packaged diagnostics did not initialize the clean runtime directory."
+}
+if (Get-ChildItem -LiteralPath $packageSmokeRuntime -Recurse -Filter "ffmpeg.exe") {
+    throw "Clean-runtime validation unexpectedly installed FFmpeg outside the package."
 }
 
 if (-not $SkipArchive) {

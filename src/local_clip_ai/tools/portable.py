@@ -4,6 +4,7 @@ import hashlib
 import json
 import os
 import shutil
+import sys
 import tempfile
 import urllib.request
 import zipfile
@@ -106,7 +107,11 @@ def _installed_at() -> str:
 
 def _install_ffmpeg(paths: AppPaths, force: bool) -> PortableToolInstall:
     install_root = paths.tools / "ffmpeg"
-    existing_ffmpeg, existing_ffprobe = find_ffmpeg(paths, include_path=False)
+    existing_ffmpeg, existing_ffprobe = find_ffmpeg(
+        paths,
+        include_path=False,
+        include_bundled=False,
+    )
     receipt = install_root / "install.json"
     if not force and existing_ffmpeg and existing_ffprobe and receipt.is_file():
         values = json.loads(receipt.read_text(encoding="utf-8"))
@@ -189,20 +194,41 @@ def find_ffmpeg(
     paths: AppPaths,
     *,
     include_path: bool = True,
+    include_bundled: bool = True,
 ) -> tuple[Path | None, Path | None]:
     ffmpeg = next(paths.tools.glob("ffmpeg/**/ffmpeg.exe"), None)
     ffprobe = next(paths.tools.glob("ffmpeg/**/ffprobe.exe"), None)
+    if include_bundled and (bundled_tools := _bundled_tools_directory()):
+        ffmpeg = ffmpeg or next(bundled_tools.glob("ffmpeg/**/ffmpeg.exe"), None)
+        ffprobe = ffprobe or next(bundled_tools.glob("ffmpeg/**/ffprobe.exe"), None)
     if include_path:
         ffmpeg = ffmpeg or _which_path("ffmpeg")
         ffprobe = ffprobe or _which_path("ffprobe")
     return ffmpeg, ffprobe
 
 
-def find_yt_dlp(paths: AppPaths, *, include_path: bool = True) -> Path | None:
+def find_yt_dlp(
+    paths: AppPaths,
+    *,
+    include_path: bool = True,
+    include_bundled: bool = True,
+) -> Path | None:
     portable = paths.tools / "yt-dlp" / YT_DLP_ASSET
     if portable.is_file():
         return portable
+    if include_bundled and (bundled_tools := _bundled_tools_directory()):
+        bundled = bundled_tools / "yt-dlp" / YT_DLP_ASSET
+        if bundled.is_file():
+            return bundled
     return _which_path("yt-dlp") if include_path else None
+
+
+def _bundled_tools_directory() -> Path | None:
+    frozen_root = getattr(sys, "_MEIPASS", None)
+    if not frozen_root:
+        return None
+    bundled_tools = Path(frozen_root) / "bundled_tools"
+    return bundled_tools if bundled_tools.is_dir() else None
 
 
 def _which_path(name: str) -> Path | None:

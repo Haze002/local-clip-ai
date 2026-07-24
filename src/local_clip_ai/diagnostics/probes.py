@@ -11,6 +11,7 @@ import tempfile
 from collections.abc import Callable
 from datetime import UTC, datetime
 from io import StringIO
+from pathlib import Path
 
 from local_clip_ai.diagnostics.models import (
     CheckStatus,
@@ -237,9 +238,9 @@ def _check_nvidia_gpu() -> DiagnosticCheck:
     )
 
 
-def _tool_version(executable: str) -> str:
+def _tool_version(executable: str | Path, *arguments: str) -> str:
     completed = subprocess.run(
-        [executable, "-version"],
+        [executable, *(arguments or ("-version",))],
         check=False,
         capture_output=True,
         text=True,
@@ -258,7 +259,10 @@ def _check_ffmpeg(paths: AppPaths) -> DiagnosticCheck:
         return DiagnosticCheck(
             name="FFmpeg",
             status=CheckStatus.FAIL,
-            summary=f"Missing required executable(s): {', '.join(missing)}; run install-tools",
+            summary=(
+                f"Missing required executable(s): {', '.join(missing)}; "
+                "open Settings and select Install / repair"
+            ),
             details={"ffmpeg": ffmpeg, "ffprobe": ffprobe},
         )
 
@@ -270,6 +274,25 @@ def _check_ffmpeg(paths: AppPaths) -> DiagnosticCheck:
             "ffmpeg": str(ffmpeg.resolve()),
             "ffprobe": str(ffprobe.resolve()),
         },
+    )
+
+
+def _check_yt_dlp(paths: AppPaths) -> DiagnosticCheck:
+    from local_clip_ai.tools import find_yt_dlp
+
+    executable = find_yt_dlp(paths)
+    if executable is None:
+        return DiagnosticCheck(
+            name="Twitch downloader",
+            status=CheckStatus.FAIL,
+            summary="Missing required yt-dlp.exe; open Settings and select Install / repair",
+            details={"yt_dlp": None},
+        )
+    return DiagnosticCheck(
+        name="Twitch downloader",
+        status=CheckStatus.PASS,
+        summary=_tool_version(executable, "--version"),
+        details={"yt_dlp": str(executable.resolve())},
     )
 
 
@@ -351,6 +374,7 @@ def collect_diagnostics(paths: AppPaths) -> DiagnosticReport:
         _safe_probe("NVIDIA GPU", _check_nvidia_gpu),
         _safe_probe("Local AI runtime", _check_local_ai),
         _safe_probe("FFmpeg", lambda: _check_ffmpeg(paths)),
+        _safe_probe("Twitch downloader", lambda: _check_yt_dlp(paths)),
         _safe_probe("SQLite", _check_sqlite),
         _safe_probe("Runtime storage", lambda: _check_storage(paths)),
     )

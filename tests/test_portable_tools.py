@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import shutil
+import sys
 import unittest
 import uuid
 import zipfile
 from pathlib import Path
+from unittest.mock import patch
 
 from local_clip_ai.paths import AppPaths
 from local_clip_ai.tools import find_ffmpeg, find_yt_dlp
@@ -30,6 +32,30 @@ class PortableToolsTests(unittest.TestCase):
 
         self.assertEqual(find_ffmpeg(self.paths, include_path=False), (ffmpeg, ffprobe))
         self.assertEqual(find_yt_dlp(self.paths, include_path=False), yt_dlp)
+
+    def test_finds_tools_bundled_by_pyinstaller_with_clean_runtime(self) -> None:
+        frozen_root = self.root / "frozen"
+        ffmpeg = frozen_root / "bundled_tools" / "ffmpeg" / "bin" / "ffmpeg.exe"
+        ffprobe = frozen_root / "bundled_tools" / "ffmpeg" / "bin" / "ffprobe.exe"
+        yt_dlp = frozen_root / "bundled_tools" / "yt-dlp" / "yt-dlp.exe"
+        for executable in (ffmpeg, ffprobe, yt_dlp):
+            executable.parent.mkdir(parents=True, exist_ok=True)
+            executable.touch()
+
+        with patch.object(sys, "_MEIPASS", str(frozen_root), create=True):
+            self.assertEqual(
+                find_ffmpeg(self.paths, include_path=False),
+                (ffmpeg, ffprobe),
+            )
+            self.assertEqual(find_yt_dlp(self.paths, include_path=False), yt_dlp)
+            self.assertEqual(
+                find_ffmpeg(
+                    self.paths,
+                    include_path=False,
+                    include_bundled=False,
+                ),
+                (None, None),
+            )
 
     def test_requires_github_sha256_digest(self) -> None:
         value = "a" * 64

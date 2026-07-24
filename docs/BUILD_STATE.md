@@ -159,12 +159,36 @@ Update it whenever a milestone is completed or a material blocker changes.
   - packaged parent → packaged child queue execution completed every Quick stage;
   - the packaged calibrated `rebuild-candidates` command preserved 6/6 recall;
   - packaged GUI process launched and remained healthy.
-- The validated unpacked beta is 2.56 GiB. The ZIP is 1.52 GiB with SHA-256:
+- The initial validated unpacked beta was 2.56 GiB. Its ZIP was 1.52 GiB with SHA-256:
   `c5e3f6e35df355b1faf8bd095b5f5094db31cdac3301b96daa3607945b43877f`.
-- The final archive contains 3,558 entries; its packaged executable and QML UI were
+- That initial archive contained 3,558 entries; its packaged executable and QML UI were
   verified in-place, and the generated checksum file matches the 1.515 GiB ZIP.
 - Added `docs/WINDOWS_BETA.md` with install, first-run, Twitch, privacy, recovery, and
   build instructions. Build output remains ignored and is not committed to Git.
+
+### Milestone 7 - Self-contained media-tool hotfix
+
+- A real clean first launch exposed that the initial ZIP expected the user to select
+  **Settings > Install / repair** before FFmpeg diagnostics could pass. Earlier packaged
+  diagnostics had reused populated development runtime data and did not exercise this
+  state.
+- Version 0.1.1 bundles the verified FFmpeg/ffprobe shared build and yt-dlp executable
+  inside the one-folder package. Runtime discovery checks user-local repaired tools
+  first, then bundled tools, then `PATH`; no system-wide installation is required.
+- The build now fails immediately when lint, tests, dependency setup, tool preparation,
+  PyInstaller, or package diagnostics fail. It also asserts that all three bundled
+  executables exist.
+- Packaged diagnostics are launched as a hidden process with an explicit wait and real
+  exit-code check. The test uses an empty runtime directory and asserts that FFmpeg was
+  not installed into it, proving the package used its bundled copy.
+- Diagnostics now checks yt-dlp as a required Twitch downloader and gives GUI-specific
+  repair instructions when a media executable is missing.
+- The corrected unpacked beta is 2.856 GiB and contains 3,552 files. The ZIP contains
+  3,585 entries and is 1.651 GiB (1,772,325,408 bytes), with SHA-256:
+  `c887ed93eb148835564737a384fe79c845b83abe75bca225f3d2a2d886ada5ed`.
+- The generated checksum matches the archive, and FFmpeg, ffprobe, and yt-dlp were
+  inspected inside the ZIP. Strict packaged diagnostics against a clean runtime exited
+  successfully.
 
 ### Calibration tooling
 
@@ -187,7 +211,7 @@ Update it whenever a milestone is completed or a material blocker changes.
   pause and stable-cooldown resume behavior.
 - Candidate-only rebuilding is available through `rebuild-candidates`, so preference and
   ranking changes reuse completed media, transcript, audio, visual, and semantic stages.
-- The full suite currently passes: 62 tests plus 2 parameterized subtests, with Ruff
+- The full suite currently passes: 63 tests plus 2 parameterized subtests, with Ruff
   clean. All calibration reports, media, transcripts, models, frames, databases, and
   exports remain ignored local data.
 

@@ -5,7 +5,7 @@ import threading
 from PySide6.QtCore import Property, QObject, Signal, Slot
 
 from local_clip_ai.paths import AppPaths
-from local_clip_ai.tools import install_portable_tools
+from local_clip_ai.tools import find_ffmpeg, find_yt_dlp, install_portable_tools
 
 
 class ToolController(QObject):
@@ -16,10 +16,18 @@ class ToolController(QObject):
         super().__init__()
         self._paths = paths
         self._busy = False
-        self._status = (
-            "Install or repair verified portable FFmpeg, ffprobe, and yt-dlp. "
-            "Nothing is installed system-wide."
-        )
+        ffmpeg, ffprobe = find_ffmpeg(paths)
+        yt_dlp = find_yt_dlp(paths)
+        if ffmpeg and ffprobe and yt_dlp:
+            self._status = (
+                "Verified portable FFmpeg, ffprobe, and yt-dlp are ready. "
+                "Install / repair downloads a fresh verified copy if needed."
+            )
+        else:
+            self._status = (
+                "Portable media tools are incomplete. Select Install / repair to "
+                "download verified copies; nothing is installed system-wide."
+            )
         self.installFinished.connect(self._finished)
 
     @Property(bool, notify=changed)

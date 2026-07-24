@@ -68,7 +68,8 @@ and Twitch connection details.
 - Windows 11
 - Python 3.12
 - A current NVIDIA display driver
-- FFmpeg and ffprobe (a verified portable build is installed locally by the bootstrap)
+- FFmpeg, ffprobe, and yt-dlp (verified portable builds are bundled in the
+  Windows beta and installed repository-locally for source development)
 - About 2 GiB for repository-local NVIDIA runtime packages and the Quick model
 
 AI model files, VODs, transcripts, databases, exports, logs, and credentials are

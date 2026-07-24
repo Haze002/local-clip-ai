@@ -5,6 +5,7 @@ from PyInstaller.utils.hooks import collect_all
 
 repository_root = Path(SPEC).resolve().parent.parent
 source_root = repository_root / "src"
+portable_tools_root = repository_root / ".local-data" / "tools"
 datas = [
     (
         str(source_root / "local_clip_ai" / "app" / "qml" / "Main.qml"),
@@ -12,6 +13,30 @@ datas = [
     ),
     (str(repository_root / "README.md"), "."),
     (str(repository_root / "docs" / "WINDOWS_BETA.md"), "docs"),
+    (
+        str(portable_tools_root / "ffmpeg" / "bin"),
+        "bundled_tools/ffmpeg/bin",
+    ),
+    (
+        str(portable_tools_root / "ffmpeg" / "presets"),
+        "bundled_tools/ffmpeg/presets",
+    ),
+    (
+        str(portable_tools_root / "ffmpeg" / "LICENSE.txt"),
+        "bundled_tools/ffmpeg",
+    ),
+    (
+        str(portable_tools_root / "ffmpeg" / "install.json"),
+        "bundled_tools/ffmpeg",
+    ),
+    (
+        str(portable_tools_root / "yt-dlp" / "yt-dlp.exe"),
+        "bundled_tools/yt-dlp",
+    ),
+    (
+        str(portable_tools_root / "yt-dlp" / "install.json"),
+        "bundled_tools/yt-dlp",
+    ),
 ]
 binaries = []
 hidden_imports = [

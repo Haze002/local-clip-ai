@@ -6,11 +6,13 @@
    executable from inside the ZIP.
 2. Launch `LocalClipAI.exe`. The beta is not code-signed yet, so Windows may
    show a SmartScreen warning.
-3. Open **Settings** and select **Install / repair** under Portable Media Tools.
-   Local Clip AI downloads FFmpeg, ffprobe, and yt-dlp from their official
+3. Open **Diagnostics** and confirm that the required checks pass. Verified
+   portable FFmpeg, ffprobe, and yt-dlp builds are included in the Windows ZIP,
+   so a clean extraction does not require a separate media-tool installation.
+4. If those bundled files are damaged or removed, open **Settings** and select
+   **Install / repair**. Local Clip AI downloads fresh copies from the official
    GitHub releases, verifies GitHub's SHA-256 digests, and installs them only
    inside Local Clip AI's runtime directory.
-4. Open **Diagnostics** and confirm that the required checks pass.
 
 Python, a system CUDA toolkit, and system-wide FFmpeg are not required by the
 packaged beta. A current NVIDIA display driver is required for GPU acceleration.
@@ -79,6 +81,8 @@ From a bootstrapped checkout:
 .\scripts\build_windows_beta.ps1
 ```
 
-The script runs lint/tests, builds a PyInstaller one-folder app, creates
+The script installs or verifies the repository-local portable tools, runs
+lint/tests, builds a PyInstaller one-folder app, runs strict diagnostics against
+a completely clean runtime directory, creates
 `dist\LocalClipAI-Windows-Beta.zip`, and writes its SHA-256 checksum. Build
 outputs and all runtime data are ignored by Git.
