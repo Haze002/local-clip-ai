@@ -43,21 +43,39 @@ class QmlSmokeTests(unittest.TestCase):
         diagnostics_model = DiagnosticsListModel()
         diagnostics = DiagnosticsController(self.paths, diagnostics_model)
         jobs_model = JobListModel()
+        database = JobDatabase(self.paths.database)
         queue = QueueController(
             self.paths,
-            JobDatabase(self.paths.database),
+            database,
             jobs_model,
+        )
+        source_uri = "https://www.twitch.tv/videos/123"
+        database.upsert_source(
+            source_uri,
+            source_kind="twitch",
+            provider_id="123",
+            title="Named VOD",
+            channel="haze002",
+        )
+        job_id = database.create_job(source_uri, source_kind="twitch")
+        database.save_candidate(
+            job_id,
+            start_seconds=10,
+            end_seconds=20,
+            score=0.9,
+            title="Candidate",
+            spans=[{"start_seconds": 10, "end_seconds": 20, "score": 0.9}],
         )
         candidates_model = CandidateListModel()
         results = ResultsController(
             self.paths,
-            JobDatabase(self.paths.database),
+            database,
             candidates_model,
         )
-        resources = ResourceController(JobDatabase(self.paths.database))
+        resources = ResourceController(database)
         tray = TrayController(queue.startQueue)
-        profiles = ProfilesController(JobDatabase(self.paths.database))
-        twitch = TwitchController(JobDatabase(self.paths.database))
+        profiles = ProfilesController(database)
+        twitch = TwitchController(database)
         tools = ToolController(self.paths)
         engine = QQmlApplicationEngine()
         engine.rootContext().setContextProperty("diagnosticsController", diagnostics)

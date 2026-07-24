@@ -14,6 +14,7 @@ $checksumPath = "$archivePath.sha256"
 $packageSmokeRuntime = Join-Path $repositoryRoot "build\package-smoke-runtime"
 $unicodeSmokeOutput = Join-Path $repositoryRoot "build\package-unicode-smoke.stdout.txt"
 $unicodeSmokeError = Join-Path $repositoryRoot "build\package-unicode-smoke.stderr.txt"
+$mediaSmokeInput = Join-Path $repositoryRoot "build\package-media-smoke.mp4"
 
 if (-not (Test-Path -LiteralPath $pythonExecutable)) {
     throw "The development environment is missing. Run .\scripts\bootstrap.ps1 first."
@@ -63,6 +64,19 @@ $requiredBundledExecutables = @(
 foreach ($requiredExecutable in $requiredBundledExecutables) {
     if (-not (Test-Path -LiteralPath $requiredExecutable)) {
         throw "The package is missing a bundled media tool: $requiredExecutable"
+    }
+}
+
+$requiredMultimediaFiles = @(
+    (Join-Path $applicationDirectory "_internal\PySide6\plugins\multimedia\ffmpegmediaplugin.dll"),
+    (Join-Path $applicationDirectory "_internal\PySide6\plugins\multimedia\windowsmediaplugin.dll"),
+    (Join-Path $applicationDirectory "_internal\PySide6\avcodec-61.dll"),
+    (Join-Path $applicationDirectory "_internal\PySide6\avformat-61.dll"),
+    (Join-Path $applicationDirectory "_internal\PySide6\avutil-59.dll")
+)
+foreach ($requiredMultimediaFile in $requiredMultimediaFiles) {
+    if (-not (Test-Path -LiteralPath $requiredMultimediaFile)) {
+        throw "The package is missing a Qt multimedia dependency: $requiredMultimediaFile"
     }
 }
 
@@ -122,6 +136,40 @@ $guiStdioProcess = Start-Process `
     -PassThru
 if ($guiStdioProcess.ExitCode -ne 0) {
     throw "Packaged no-console GUI stream smoke test failed."
+}
+
+if (Test-Path -LiteralPath $mediaSmokeInput) {
+    Remove-Item -LiteralPath $mediaSmokeInput -Force
+}
+$bundledFfmpeg = Join-Path $applicationDirectory "_internal\bundled_tools\ffmpeg\bin\ffmpeg.exe"
+& $bundledFfmpeg `
+    -hide_banner `
+    -loglevel error `
+    -y `
+    -f lavfi `
+    -i "color=c=blue:s=640x360:r=30" `
+    -f lavfi `
+    -i "sine=frequency=440:sample_rate=48000" `
+    -t 2 `
+    -shortest `
+    -c:v h264_nvenc `
+    -preset p1 `
+    -cq 30 `
+    -b:v 0 `
+    -pix_fmt yuv420p `
+    -c:a aac `
+    $mediaSmokeInput
+if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $mediaSmokeInput)) {
+    throw "Could not create the packaged multimedia smoke video."
+}
+$mediaSmokeProcess = Start-Process `
+    -FilePath (Join-Path $applicationDirectory "LocalClipAI.exe") `
+    -ArgumentList @("--frozen-media-smoke", "`"$mediaSmokeInput`"") `
+    -WindowStyle Hidden `
+    -Wait `
+    -PassThru
+if ($mediaSmokeProcess.ExitCode -ne 0) {
+    throw "Packaged Qt multimedia playback smoke test failed."
 }
 
 if (-not $SkipArchive) {

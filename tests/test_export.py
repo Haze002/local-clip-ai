@@ -30,6 +30,16 @@ class ExportTests(unittest.TestCase):
                 ]
             )
 
+    def test_filter_graph_downscales_without_upscaling(self) -> None:
+        graph = build_concat_filter(
+            [CondensedSpan(10, 20, 0.9, "moment")],
+            max_output_height=1080,
+        )
+
+        self.assertIn("concat=n=1:v=1:a=1[joinedv][outa]", graph)
+        self.assertIn("scale=-2:'min(1080,ih)':flags=lanczos", graph)
+        self.assertTrue(graph.endswith("setsar=1[outv]"))
+
     def test_progress_pattern_accepts_ffmpeg_microsecond_output(self) -> None:
         match = OUT_TIME.fullmatch("out_time_us=12500000")
 

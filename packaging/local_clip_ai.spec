@@ -1,5 +1,6 @@
 from pathlib import Path
 
+import PySide6
 from PyInstaller.utils.hooks import collect_all
 
 
@@ -39,12 +40,21 @@ datas = [
     ),
 ]
 binaries = []
+pyside6_root = Path(PySide6.__file__).resolve().parent
+for multimedia_plugin in (pyside6_root / "plugins" / "multimedia").glob("*.dll"):
+    binaries.append((str(multimedia_plugin), "PySide6/plugins/multimedia"))
+for runtime_pattern in ("av*.dll", "sw*.dll"):
+    for multimedia_runtime in pyside6_root.glob(runtime_pattern):
+        binaries.append((str(multimedia_runtime), "PySide6"))
 hidden_imports = [
     "keyring.backends.Windows",
     "local_clip_ai.cli",
+    "local_clip_ai.app.media_smoke",
     "nvidia.cublas",
     "nvidia.cuda_nvrtc",
     "nvidia.cudnn",
+    "PySide6.QtMultimedia",
+    "PySide6.QtMultimediaWidgets",
 ]
 
 for package_name in (

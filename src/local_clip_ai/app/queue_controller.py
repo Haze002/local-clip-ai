@@ -39,6 +39,8 @@ class JobListModel(QAbstractListModel):
     StageRole = Qt.ItemDataRole.UserRole + 6
     PauseReasonRole = Qt.ItemDataRole.UserRole + 7
     PositionRole = Qt.ItemDataRole.UserRole + 8
+    SourceTitleRole = Qt.ItemDataRole.UserRole + 9
+    SourceDetailRole = Qt.ItemDataRole.UserRole + 10
 
     def __init__(self, parent: QObject | None = None):
         super().__init__(parent)
@@ -54,6 +56,8 @@ class JobListModel(QAbstractListModel):
             self.StageRole: QByteArray(b"jobStage"),
             self.PauseReasonRole: QByteArray(b"jobPauseReason"),
             self.PositionRole: QByteArray(b"jobPosition"),
+            self.SourceTitleRole: QByteArray(b"jobSourceTitle"),
+            self.SourceDetailRole: QByteArray(b"jobSourceDetail"),
         }
 
     def rowCount(self, parent: QModelIndex = INVALID_MODEL_INDEX) -> int:
@@ -63,15 +67,25 @@ class JobListModel(QAbstractListModel):
         if not index.isValid() or not 0 <= index.row() < len(self._jobs):
             return None
         job = self._jobs[index.row()]
+        source_uri = str(job["source_uri"])
+        source_title = str(job.get("source_title") or "")
+        if not source_title and job["source_kind"] == "file":
+            source_title = Path(source_uri).stem
+        if not source_title:
+            source_title = source_uri
+        channel = str(job.get("source_channel") or "")
+        source_detail = f"{channel}  /  {source_uri}" if channel else source_uri
         values = {
             self.IdRole: job["id"],
-            self.SourceRole: job["source_uri"],
+            self.SourceRole: source_uri,
             self.StatusRole: job["status"],
             self.ModeRole: job["analysis_mode"],
             self.ProgressRole: float(job.get("progress") or 0),
             self.StageRole: job.get("current_stage") or "Waiting",
             self.PauseReasonRole: job.get("paused_reason") or "",
             self.PositionRole: int(job.get("queue_position") or 0),
+            self.SourceTitleRole: source_title,
+            self.SourceDetailRole: source_detail,
         }
         return values.get(role)
 

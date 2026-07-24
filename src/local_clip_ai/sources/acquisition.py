@@ -113,6 +113,7 @@ def acquire_twitch_section(
     *,
     destination: Path | None = None,
     audio_only: bool = False,
+    max_height: int | None = None,
     cancel_requested: CancelCheck | None = None,
     on_output: ProgressCallback | None = None,
 ) -> AcquiredSection:
@@ -121,8 +122,10 @@ def acquire_twitch_section(
     target_directory = destination or paths.downloads / video_id
     target_directory.mkdir(parents=True, exist_ok=True)
     media_kind = "audio" if audio_only else "source"
+    quality_suffix = f"_{max_height}p" if max_height is not None and not audio_only else ""
     stem = (
-        f"{video_id}_{int(source_range.start):06d}_{int(source_range.end):06d}_{media_kind}"
+        f"{video_id}_{int(source_range.start):06d}_{int(source_range.end):06d}"
+        f"{quality_suffix}_{media_kind}"
     )
     template = target_directory / f"{stem}.%(ext)s"
     command = yt_dlp_section_command(
@@ -132,6 +135,7 @@ def acquire_twitch_section(
         end_seconds=source_range.end,
         output=template,
         audio_only=audio_only,
+        max_height=max_height,
     )
     return_code, lines = run_cancellable_process(
         command,
@@ -189,11 +193,7 @@ def acquire_twitch_analysis_media(
         raise RuntimeError("FFmpeg is not installed; run install-tools first")
     target_directory = paths.downloads / video_id
     target_directory.mkdir(parents=True, exist_ok=True)
-    format_selector = (
-        "Audio_Only/bestaudio"
-        if analysis_mode == "quick"
-        else "360p/160p/worst"
-    )
+    format_selector = "Audio_Only/bestaudio" if analysis_mode == "quick" else "360p/160p/worst"
     stem = f"{video_id}_analysis_{analysis_mode}"
     existing = [
         path

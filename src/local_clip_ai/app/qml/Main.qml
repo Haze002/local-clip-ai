@@ -21,6 +21,7 @@ ApplicationWindow {
     property int currentPage: 0
     property bool monitorVisible: false
     property var pages: ["Queue", "Results", "Profiles", "Monitor", "Diagnostics", "Settings"]
+    property var resultGroupOpen: ({})
 
     function statusColor(status) {
         if (status === "pass" || status === "completed") return "#51d88a"
@@ -40,6 +41,14 @@ ApplicationWindow {
         if (value === undefined || value === null)
             return "Unavailable"
         return Number(value).toFixed(decimals) + suffix
+    }
+
+    function toggleResultGroup(key) {
+        var updated = {}
+        for (var existingKey in resultGroupOpen)
+            updated[existingKey] = resultGroupOpen[existingKey]
+        updated[key] = resultGroupOpen[key] !== true
+        resultGroupOpen = updated
     }
 
     onClosing: function(close) {
@@ -336,6 +345,8 @@ ApplicationWindow {
                             delegate: Rectangle {
                                 required property string jobId
                                 required property string jobSource
+                                required property string jobSourceTitle
+                                required property string jobSourceDetail
                                 required property string jobStatus
                                 required property string jobMode
                                 required property real jobProgress
@@ -343,7 +354,7 @@ ApplicationWindow {
                                 required property string jobPauseReason
                                 required property int jobPosition
                                 width: parent.width
-                                height: 102
+                                height: 116
                                 radius: 12
                                 color: "#111720"
                                 border.width: 1
@@ -367,10 +378,17 @@ ApplicationWindow {
 
                                         Label {
                                             Layout.fillWidth: true
-                                            text: jobSource
+                                            text: jobSourceTitle
                                             color: "#f4f7fb"
-                                            font.pixelSize: 13
+                                            font.pixelSize: 14
                                             font.weight: Font.DemiBold
+                                            elide: Text.ElideMiddle
+                                        }
+                                        Label {
+                                            Layout.fillWidth: true
+                                            text: jobSourceDetail
+                                            color: "#657188"
+                                            font.pixelSize: 10
                                             elide: Text.ElideMiddle
                                         }
                                         Label {
@@ -438,9 +456,26 @@ ApplicationWindow {
             }
             MediaPlayer {
                 id: previewPlayer
-                source: resultsController.previewSource
                 audioOutput: previewAudio
                 videoOutput: previewVideo
+                onErrorOccurred: resultsController.previewPlaybackFailed(errorString)
+                onDurationChanged: {
+                    if (duration > 0)
+                        resultsController.previewPlaybackReady(duration)
+                }
+            }
+            Connections {
+                target: resultsController
+                function onPreviewChanged() {
+                    previewPlayer.stop()
+                    var nextSource = resultsController.previewSource
+                    if (nextSource.toString().length > 0) {
+                        previewPlayer.source = nextSource
+                        previewPlayer.play()
+                    } else {
+                        previewPlayer.source = ""
+                    }
+                }
             }
 
             ColumnLayout {
@@ -591,7 +626,7 @@ ApplicationWindow {
 
                         Repeater {
                             model: candidatesModel
-                            delegate: Rectangle {
+                            delegate: Item {
                                 required property string candidateId
                                 required property string candidateJobId
                                 required property string candidateSource
@@ -603,112 +638,187 @@ ApplicationWindow {
                                 required property bool candidatePreselected
                                 required property string candidateStatus
                                 required property int candidateSpanCount
+                                required property string candidateGroupKey
+                                required property string candidateGroupTitle
+                                required property string candidateGroupSubtitle
+                                required property bool candidateGroupFirst
+                                required property int candidateGroupCount
+                                property bool groupOpen:
+                                    window.resultGroupOpen[candidateGroupKey] === true
+                                visible: candidateGroupFirst || groupOpen
                                 width: parent.width
-                                height: 128
-                                radius: 12
-                                color: "#111720"
-                                border.width: candidatePreselected ? 1 : 0
-                                border.color: "#426fae"
+                                height: visible
+                                        ? (candidateGroupFirst ? 68 : 0)
+                                          + (groupOpen ? 128 : 0)
+                                          + (candidateGroupFirst && groupOpen ? 10 : 0)
+                                        : 0
 
-                                RowLayout {
+                                Column {
                                     anchors.fill: parent
-                                    anchors.margins: 16
-                                    spacing: 14
+                                    spacing: 10
+                                    Rectangle {
+                                        visible: candidateGroupFirst
+                                        width: parent.width
+                                        height: visible ? 68 : 0
+                                        radius: 12
+                                        color: groupOpen ? "#17243a" : "#141a24"
+                                        border.width: 1
+                                        border.color: groupOpen ? "#3c6ca8" : "#263247"
+                                        RowLayout {
+                                            anchors.fill: parent
+                                            anchors.margins: 14
+                                            spacing: 14
+                                            Rectangle {
+                                                Layout.preferredWidth: 40
+                                                Layout.preferredHeight: 40
+                                                radius: 8
+                                                color: "#20324d"
+                                                Label {
+                                                    anchors.centerIn: parent
+                                                    text: groupOpen ? "-" : "+"
+                                                    color: "#76afff"
+                                                    font.pixelSize: 22
+                                                    font.weight: Font.Bold
+                                                }
+                                            }
+                                            ColumnLayout {
+                                                Layout.fillWidth: true
+                                                spacing: 2
+                                                Label {
+                                                    Layout.fillWidth: true
+                                                    text: candidateGroupTitle
+                                                    color: "#f4f7fb"
+                                                    font.pixelSize: 15
+                                                    font.weight: Font.DemiBold
+                                                    elide: Text.ElideRight
+                                                }
+                                                Label {
+                                                    Layout.fillWidth: true
+                                                    text: candidateGroupSubtitle
+                                                    color: "#69778c"
+                                                    font.pixelSize: 10
+                                                    elide: Text.ElideMiddle
+                                                }
+                                            }
+                                            Label {
+                                                text: candidateGroupCount + " clip"
+                                                      + (candidateGroupCount === 1 ? "" : "s")
+                                                color: "#8fb9f5"
+                                                font.pixelSize: 11
+                                            }
+                                        }
+                                        MouseArea {
+                                            anchors.fill: parent
+                                            cursorShape: Qt.PointingHandCursor
+                                            onClicked: window.toggleResultGroup(candidateGroupKey)
+                                        }
+                                    }
 
                                     Rectangle {
-                                        Layout.preferredWidth: 54
-                                        Layout.preferredHeight: 54
-                                        radius: 27
-                                        color: "#1d2b40"
-                                        Label {
-                                            anchors.centerIn: parent
-                                            text: Math.round(candidateScore * 100) + "%"
-                                            color: "#76afff"
-                                            font.weight: Font.Bold
-                                        }
-                                    }
+                                        visible: groupOpen
+                                        width: parent.width
+                                        height: visible ? 128 : 0
+                                        radius: 12
+                                        color: "#111720"
+                                        border.width: candidatePreselected ? 1 : 0
+                                        border.color: "#426fae"
 
-                                    ColumnLayout {
-                                        Layout.fillWidth: true
-                                        spacing: 4
                                         RowLayout {
-                                            Label {
+                                            anchors.fill: parent
+                                            anchors.margins: 16
+                                            spacing: 14
+
+                                            Rectangle {
+                                                Layout.preferredWidth: 54
+                                                Layout.preferredHeight: 54
+                                                radius: 27
+                                                color: "#1d2b40"
+                                                Label {
+                                                    anchors.centerIn: parent
+                                                    text: Math.round(candidateScore * 100) + "%"
+                                                    color: "#76afff"
+                                                    font.weight: Font.Bold
+                                                }
+                                            }
+
+                                            ColumnLayout {
                                                 Layout.fillWidth: true
-                                                text: candidateTitle
-                                                color: "#f4f7fb"
-                                                font.pixelSize: 14
-                                                font.weight: Font.DemiBold
-                                                elide: Text.ElideRight
+                                                spacing: 4
+                                                RowLayout {
+                                                    Label {
+                                                        Layout.fillWidth: true
+                                                        text: candidateTitle
+                                                        color: "#f4f7fb"
+                                                        font.pixelSize: 14
+                                                        font.weight: Font.DemiBold
+                                                        elide: Text.ElideRight
+                                                    }
+                                                    Label {
+                                                        visible: candidatePreselected
+                                                        text: "AUTO SELECTED"
+                                                        color: "#76afff"
+                                                        font.pixelSize: 9
+                                                        font.weight: Font.Bold
+                                                    }
+                                                }
+                                                Label {
+                                                    text: candidateTime + "  /  "
+                                                          + candidateDuration.toFixed(1)
+                                                          + "s output  /  "
+                                                          + candidateSpanCount + " span(s)"
+                                                    color: "#a2adbd"
+                                                    font.pixelSize: 11
+                                                }
+                                                Label {
+                                                    Layout.fillWidth: true
+                                                    text: candidateRationale
+                                                    color: "#69778c"
+                                                    font.pixelSize: 11
+                                                    wrapMode: Text.WordWrap
+                                                    maximumLineCount: 2
+                                                    elide: Text.ElideRight
+                                                }
                                             }
-                                            Label {
-                                                visible: candidatePreselected
-                                                text: "AUTO SELECTED"
-                                                color: "#76afff"
-                                                font.pixelSize: 9
-                                                font.weight: Font.Bold
+
+                                            GridLayout {
+                                                columns: 2
+                                                Layout.preferredWidth: 190
+                                                rowSpacing: 4
+                                                columnSpacing: 4
+
+                                                Button {
+                                                    Layout.fillWidth: true
+                                                    text: "Preview"
+                                                    enabled: !resultsController.exporting
+                                                             && !resultsController.previewing
+                                                    onClicked:
+                                                        resultsController.previewCandidate(candidateId)
+                                                }
+                                                Button {
+                                                    Layout.fillWidth: true
+                                                    text: candidateStatus === "selected"
+                                                          ? "Selected" : "Select"
+                                                    onClicked: resultsController.review(
+                                                        candidateId, "selected"
+                                                    )
+                                                }
+                                                Button {
+                                                    Layout.fillWidth: true
+                                                    text: "Reject"
+                                                    onClicked: resultsController.review(
+                                                        candidateId, "rejected"
+                                                    )
+                                                }
+                                                Button {
+                                                    Layout.fillWidth: true
+                                                    text: candidateStatus === "exported"
+                                                          ? "Export again" : "Export"
+                                                    enabled: !resultsController.exporting
+                                                             && !resultsController.previewing
+                                                    onClicked:
+                                                        resultsController.exportCandidate(candidateId)
+                                                }
                                             }
-                                        }
-                                        Label {
-                                            text: candidateTime + "  /  "
-                                                  + candidateDuration.toFixed(1) + "s output  /  "
-                                                  + candidateSpanCount + " span(s)"
-                                            color: "#a2adbd"
-                                            font.pixelSize: 11
-                                        }
-                                        Label {
-                                            Layout.fillWidth: true
-                                            text: candidateRationale
-                                            color: "#69778c"
-                                            font.pixelSize: 11
-                                            wrapMode: Text.WordWrap
-                                            maximumLineCount: 2
-                                            elide: Text.ElideRight
-                                        }
-                                        Label {
-                                            Layout.fillWidth: true
-                                            text: candidateSource
-                                            color: "#596579"
-                                            font.pixelSize: 10
-                                            elide: Text.ElideMiddle
-                                        }
-                                    }
-
-                                    GridLayout {
-                                        columns: 2
-                                        Layout.preferredWidth: 190
-                                        rowSpacing: 4
-                                        columnSpacing: 4
-
-                                        Button {
-                                            Layout.fillWidth: true
-                                            text: "Preview"
-                                            enabled: !resultsController.exporting
-                                                     && !resultsController.previewing
-                                            onClicked: resultsController.previewCandidate(candidateId)
-                                        }
-                                        Button {
-                                            Layout.fillWidth: true
-                                            text: candidateStatus === "selected"
-                                                  ? "Selected" : "Select"
-                                            onClicked: resultsController.review(
-                                                candidateId, "selected"
-                                            )
-                                        }
-                                        Button {
-                                            Layout.fillWidth: true
-                                            text: "Reject"
-                                            onClicked: resultsController.review(
-                                                candidateId, "rejected"
-                                            )
-                                        }
-                                        Button {
-                                            Layout.fillWidth: true
-                                            text: candidateStatus === "exported"
-                                                  ? "Exported" : "Export"
-                                            enabled: !resultsController.exporting
-                                                     && !resultsController.previewing
-                                                     && candidateStatus !== "exported"
-                                            onClicked: resultsController.exportCandidate(candidateId)
                                         }
                                     }
                                 }
@@ -1274,7 +1384,7 @@ ApplicationWindow {
 
                 Rectangle {
                     Layout.fillWidth: true
-                    Layout.preferredHeight: 450
+                    Layout.fillHeight: true
                     radius: 12
                     color: "#141a24"
                     border.width: 1
@@ -1285,6 +1395,72 @@ ApplicationWindow {
                         anchors.margins: 18
                         spacing: 12
 
+                        Label {
+                            text: "CLIP OUTPUT"
+                            color: "#697589"
+                            font.pixelSize: 10
+                            font.weight: Font.Bold
+                        }
+                        Label {
+                            Layout.fillWidth: true
+                            wrapMode: Text.WordWrap
+                            text: "Exports use source-quality Twitch sections and are grouped "
+                                  + "into one named folder per VOD. Preview files use up to "
+                                  + "720p for responsive review."
+                            color: "#9aa5b6"
+                        }
+                        RowLayout {
+                            Layout.fillWidth: true
+                            Label {
+                                text: "Maximum resolution"
+                                color: "#aab3c2"
+                            }
+                            ComboBox {
+                                id: exportResolutionSelector
+                                model: ["1080p", "720p", "480p", "Source"]
+                                currentIndex: ["1080p", "720p", "480p", "Source"].indexOf(
+                                    resultsController.exportResolution
+                                )
+                                Layout.preferredWidth: 130
+                                onActivated: resultsController.setExportResolution(currentText)
+                            }
+                            Label {
+                                text: "Export folder"
+                                color: "#aab3c2"
+                                Layout.leftMargin: 8
+                            }
+                            TextField {
+                                Layout.fillWidth: true
+                                text: resultsController.exportDirectory
+                                readOnly: true
+                                selectByMouse: true
+                            }
+                            Button {
+                                text: "Browse"
+                                onClicked: resultsController.chooseExportDirectory()
+                            }
+                            Button {
+                                text: "Open"
+                                onClicked: resultsController.openExportDirectory()
+                            }
+                            Button {
+                                text: "Reset"
+                                onClicked: resultsController.resetExportDirectory()
+                            }
+                        }
+                        Label {
+                            Layout.fillWidth: true
+                            text: "Source keeps the original dimensions. Other choices only "
+                                  + "downscale when necessary and never stretch a lower-resolution VOD."
+                            color: "#657188"
+                            font.pixelSize: 11
+                            wrapMode: Text.WordWrap
+                        }
+                        Rectangle {
+                            Layout.fillWidth: true
+                            Layout.preferredHeight: 1
+                            color: "#263247"
+                        }
                         Label {
                             text: "TWITCH LATEST-VOD AUTOMATION"
                             color: "#697589"

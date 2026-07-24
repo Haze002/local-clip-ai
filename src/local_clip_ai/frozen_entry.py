@@ -8,6 +8,7 @@ from typing import Any
 
 _NULL_STREAMS = ExitStack()
 GUI_STDIO_SMOKE_ARGUMENT = "--frozen-gui-stdio-smoke"
+MEDIA_SMOKE_ARGUMENT = "--frozen-media-smoke"
 
 
 def _utf8_stream(stream: Any) -> Any:
@@ -43,6 +44,15 @@ def main(argv: Sequence[str] | None = None) -> int:
         sys.stdout.flush()
         sys.stderr.flush()
         return 0
+    if MEDIA_SMOKE_ARGUMENT in arguments:
+        argument_index = arguments.index(MEDIA_SMOKE_ARGUMENT)
+        try:
+            media_path = arguments[argument_index + 1]
+        except IndexError:
+            return 2
+        from local_clip_ai.app.media_smoke import run_media_smoke
+
+        return run_media_smoke(media_path)
     if "--worker-cli" in arguments:
         arguments.remove("--worker-cli")
         from local_clip_ai.cli import main as cli_main

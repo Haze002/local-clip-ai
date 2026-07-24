@@ -38,9 +38,12 @@ def build_concat_filter(
     spans: tuple[SpanLike, ...] | list[SpanLike],
     *,
     source_offset_seconds: float = 0,
+    max_output_height: int | None = None,
 ) -> str:
     if not spans:
         raise ValueError("At least one source span is required")
+    if max_output_height is not None and max_output_height <= 0:
+        raise ValueError("Maximum output height must be positive")
     filters: list[str] = []
     inputs: list[str] = []
     previous_end = -1.0
@@ -54,16 +57,17 @@ def build_concat_filter(
         previous_end = span.end_seconds
         filters.extend(
             (
-                f"[0:v]trim=start={start:.6f}:end={end:.6f},"
-                f"setpts=PTS-STARTPTS[v{index}]",
-                f"[0:a]atrim=start={start:.6f}:end={end:.6f},"
-                f"asetpts=PTS-STARTPTS[a{index}]",
+                f"[0:v]trim=start={start:.6f}:end={end:.6f},setpts=PTS-STARTPTS[v{index}]",
+                f"[0:a]atrim=start={start:.6f}:end={end:.6f},asetpts=PTS-STARTPTS[a{index}]",
             )
         )
         inputs.append(f"[v{index}][a{index}]")
-    filters.append(
-        f"{''.join(inputs)}concat=n={len(spans)}:v=1:a=1[outv][outa]"
-    )
+    video_output = "joinedv" if max_output_height is not None else "outv"
+    filters.append(f"{''.join(inputs)}concat=n={len(spans)}:v=1:a=1[{video_output}][outa]")
+    if max_output_height is not None:
+        filters.append(
+            f"[joinedv]scale=-2:'min({max_output_height},ih)':flags=lanczos,setsar=1[outv]"
+        )
     return ";".join(filters)
 
 
@@ -144,6 +148,7 @@ def export_condensed_clip(
     destination: Path | str,
     *,
     source_offset_seconds: float = 0,
+    max_output_height: int | None = None,
     overwrite: bool = False,
     cancel_requested: CancelCheck | None = None,
     on_progress: ProgressCallback | None = None,
@@ -162,6 +167,7 @@ def export_condensed_clip(
     filter_graph = build_concat_filter(
         spans,
         source_offset_seconds=source_offset_seconds,
+        max_output_height=max_output_height,
     )
     encoders = _available_encoders(ffmpeg)
     preferred_encoder = "h264_nvenc" if "h264_nvenc" in encoders else "mpeg4"

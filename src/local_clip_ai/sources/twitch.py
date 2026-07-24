@@ -90,9 +90,12 @@ def yt_dlp_section_command(
     end_seconds: float,
     output: Path,
     audio_only: bool = False,
+    max_height: int | None = None,
 ) -> list[str]:
     if end_seconds <= start_seconds:
         raise ValueError("Section end must be after its start")
+    if max_height is not None and max_height <= 0:
+        raise ValueError("Maximum height must be positive")
     _, canonical_url = parse_twitch_vod_url(url)
     executable = find_yt_dlp(paths)
     if executable is None:
@@ -126,6 +129,11 @@ def yt_dlp_section_command(
     if audio_only:
         command.extend(["--format", "bestaudio/best", "--extract-audio", "--audio-format", "wav"])
     else:
-        command.extend(["--format", "bestvideo*+bestaudio/best"])
+        format_selector = "bestvideo*+bestaudio/best"
+        if max_height is not None:
+            format_selector = (
+                f"bestvideo*[height<={max_height}]+bestaudio/best[height<={max_height}]/best"
+            )
+        command.extend(["--format", format_selector])
     command.append(canonical_url)
     return command

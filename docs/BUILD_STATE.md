@@ -6,8 +6,8 @@ Update it whenever a milestone is completed or a material blocker changes.
 ## Current checkpoint
 
 - Branch: `agent/end-to-end-build`
-- Phase: Milestones 1-9 complete; tested Windows beta available
-- Last updated: 2026-07-24
+- Phase: Milestones 1-10 complete; tested Windows beta available
+- Last updated: 2026-07-25
 - GitHub media/model state: clean by design; all runtime artifacts remain ignored
 
 ## Completed
@@ -238,6 +238,36 @@ Update it whenever a milestone is completed or a material blocker changes.
   `0.1.3` with empty stderr, and its generated checksum matches SHA-256:
   `ee1589e7e7e63968bb7c68d44fd67d232ff0a426812b1f5f7689d4f158cc72d6`.
 
+### Milestone 10 - Named VOD workflow, output controls, and preview repair
+
+- Version 0.2.0 exposes a persistent maximum export resolution under Settings:
+  Source, 1080p (default), 720p, or 480p. Lower-resolution inputs are never
+  stretched; higher-resolution source sections are downscaled with a Lanczos filter.
+- A real 1920x1080 export was processed through the new path using NVENC and validated
+  as a decoded 1280x720, 12.000-second H.264/AAC clip.
+- The export root can be selected with a native Windows folder dialog, opened from
+  Settings, or reset to the private Local Clip AI default. Each VOD is written below
+  `Stream title [Twitch VOD ID]`; filenames include time, candidate title, resolution,
+  and candidate ID. Re-exporting preserves earlier files by selecting a numbered name.
+- Existing source metadata is joined into queue/results reads, so Twitch jobs display
+  their real stream titles instead of raw links. Results are collapsed into one
+  openable folder per VOD. The live local database resolves the current jobs as
+  `GTA V HEISTS WITH FRIENDS!!!` and
+  `Minecraft Techopolis 3 Episode 6 with @Tomek8K !!!!`.
+- The apparently successful-but-empty preview was traced to packaging rather than
+  media generation: the generated H.264/AAC MP4 was valid, but Qt's multimedia backend
+  plug-ins and their FFmpeg runtime DLLs were absent from the PyInstaller folder.
+- Packaging now includes both Qt FFmpeg and Windows media plug-ins plus their versioned
+  multimedia libraries. The build refuses to archive unless a packaged no-console
+  process decodes an H.264/AAC smoke video, receives a video frame, and advances.
+- Review previews now use a source section capped at 720p instead of the 360p analysis
+  copy, are quality-versioned in the local cache, start playing automatically, and
+  surface backend errors in the Results notice.
+- The final v0.2.0 ZIP is 1,781,427,542 bytes. Its packaged version probe returned
+  `0.2.0` with empty stderr, all required multimedia files were present, and the
+  generated checksum matches SHA-256:
+  `07d779ed19d8444faafe0ac1a026db2b20cdf62c2f8a69767111496cbb37328d`.
+
 ### Calibration tooling
 
 - Added a machine-readable evaluator for the six user-labeled Twitch moments. It reports
@@ -259,7 +289,7 @@ Update it whenever a milestone is completed or a material blocker changes.
   pause and stable-cooldown resume behavior.
 - Candidate-only rebuilding is available through `rebuild-candidates`, so preference and
   ranking changes reuse completed media, transcript, audio, visual, and semantic stages.
-- The full suite currently passes: 65 tests plus 2 parameterized subtests, with Ruff
+- The full suite currently passes: 71 tests plus 2 parameterized subtests, with Ruff
   clean. All calibration reports, media, transcripts, models, frames, databases, and
   exports remain ignored local data.
 

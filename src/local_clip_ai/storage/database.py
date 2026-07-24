@@ -179,6 +179,17 @@ JOB_STATUSES = {
     "failed",
     "cancelled",
 }
+JOB_WITH_SOURCE_SELECT = """
+SELECT
+    jobs.*,
+    sources.provider_id AS source_provider_id,
+    sources.title AS source_title,
+    sources.channel AS source_channel,
+    sources.duration_seconds AS source_duration_seconds,
+    sources.metadata_json AS source_metadata_json
+FROM jobs
+LEFT JOIN sources ON sources.uri = jobs.source_uri
+"""
 
 
 def _utc_now() -> str:
@@ -324,21 +335,30 @@ class JobDatabase:
     def list_jobs(self) -> list[dict[str, Any]]:
         with self.session() as connection:
             rows = connection.execute(
-                "SELECT * FROM jobs ORDER BY queue_position, created_at"
+                f"{JOB_WITH_SOURCE_SELECT} ORDER BY jobs.queue_position, jobs.created_at"
             ).fetchall()
-        return [dict(row) for row in rows]
+        return [self._job_with_source(dict(row)) for row in rows]
 
     def get_job(self, job_id: str) -> dict[str, Any] | None:
         with self.session() as connection:
-            row = connection.execute("SELECT * FROM jobs WHERE id = ?", (job_id,)).fetchone()
-        return dict(row) if row else None
+            row = connection.execute(
+                f"{JOB_WITH_SOURCE_SELECT} WHERE jobs.id = ?",
+                (job_id,),
+            ).fetchone()
+        return self._job_with_source(dict(row)) if row else None
 
     def latest_job(self) -> dict[str, Any] | None:
         with self.session() as connection:
             row = connection.execute(
-                "SELECT * FROM jobs ORDER BY created_at DESC LIMIT 1"
+                f"{JOB_WITH_SOURCE_SELECT} ORDER BY jobs.created_at DESC LIMIT 1"
             ).fetchone()
-        return dict(row) if row else None
+        return self._job_with_source(dict(row)) if row else None
+
+    @staticmethod
+    def _job_with_source(job: dict[str, Any]) -> dict[str, Any]:
+        metadata_json = job.pop("source_metadata_json", None)
+        job["source_metadata"] = json.loads(metadata_json) if metadata_json else {}
+        return job
 
     def update_job_content_profile(
         self,
@@ -594,9 +614,7 @@ class JobDatabase:
 
     def list_sources(self) -> list[dict[str, Any]]:
         with self.session() as connection:
-            rows = connection.execute(
-                "SELECT * FROM sources ORDER BY updated_at DESC"
-            ).fetchall()
+            rows = connection.execute("SELECT * FROM sources ORDER BY updated_at DESC").fetchall()
         sources = [dict(row) for row in rows]
         for source in sources:
             source["metadata"] = json.loads(source.pop("metadata_json"))

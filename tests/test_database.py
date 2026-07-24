@@ -78,9 +78,7 @@ class DatabaseTests(TestCase):
         database.initialize()
         job_id = database.create_job("recording.mp4", content_profile={"max_candidates": 30})
 
-        self.assertTrue(
-            database.update_job_content_profile(job_id, {"max_candidates": 50})
-        )
+        self.assertTrue(database.update_job_content_profile(job_id, {"max_candidates": 50}))
 
         profile = json.loads(database.get_job(job_id)["content_profile_json"])
         self.assertEqual(profile["max_candidates"], 50)
@@ -89,9 +87,7 @@ class DatabaseTests(TestCase):
         path = self.temporary_path / "migration.sqlite3"
         with closing(sqlite3.connect(path)) as connection:
             connection.executescript(SCHEMA)
-            connection.execute(
-                "INSERT INTO schema_meta(key, value) VALUES('schema_version', '1')"
-            )
+            connection.execute("INSERT INTO schema_meta(key, value) VALUES('schema_version', '1')")
             connection.execute(
                 """
                 INSERT INTO jobs(
@@ -136,6 +132,29 @@ class DatabaseTests(TestCase):
             database.list_profiles("content")[0]["config"]["preference"],
             "banter and surprising failures",
         )
+
+    def test_jobs_include_stored_vod_titles(self) -> None:
+        database = JobDatabase(self.temporary_path / "titles.sqlite3")
+        database.initialize()
+        uri = "https://www.twitch.tv/videos/2823263031"
+        job_id = database.create_job(uri, source_kind="twitch")
+        database.upsert_source(
+            uri,
+            source_kind="twitch",
+            provider_id="2823263031",
+            title="Minecraft with the crew",
+            channel="haze002",
+            duration_seconds=7113,
+            metadata={"title": "Minecraft with the crew"},
+        )
+
+        listed = database.list_jobs()[0]
+        fetched = database.get_job(job_id)
+
+        self.assertEqual(listed["source_title"], "Minecraft with the crew")
+        self.assertEqual(listed["source_channel"], "haze002")
+        self.assertEqual(fetched["source_provider_id"], "2823263031")
+        self.assertEqual(fetched["source_metadata"]["title"], "Minecraft with the crew")
 
     def test_queue_pause_resume_reorder_and_restart_recovery(self) -> None:
         database = JobDatabase(self.temporary_path / "recovery.sqlite3")

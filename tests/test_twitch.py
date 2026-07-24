@@ -41,6 +41,20 @@ class TwitchSourceTests(unittest.TestCase):
             self.assertIn("*5220.000-5370.000", command)
             self.assertIn(str(ffmpeg.parent), command)
             self.assertEqual(command[-1], "https://www.twitch.tv/videos/2823263031")
+
+            limited_command = yt_dlp_section_command(
+                paths,
+                url="https://www.twitch.tv/videos/2823263031",
+                start_seconds=5220,
+                end_seconds=5370,
+                output=paths.downloads / "section.%(ext)s",
+                max_height=720,
+            )
+            format_index = limited_command.index("--format")
+            self.assertEqual(
+                limited_command[format_index + 1],
+                "bestvideo*[height<=720]+bestaudio/best[height<=720]/best",
+            )
         finally:
             import shutil
 

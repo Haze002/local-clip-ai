@@ -25,9 +25,12 @@ packaged beta. A current NVIDIA display driver is required for GPU acceleration.
    preference, analysis mode, or both.
 3. Start the queue. The app prevents Windows sleep while the queue is active.
    Download, transcription, audio, and scene stages report incremental progress.
-4. Review candidates on the Results page. **Preview** builds and plays the exact
-   proposed multi-span cut; **Export** retrieves source-quality Twitch media when
-   necessary.
+4. Open a VOD-named folder on the Results page and review its candidates.
+   **Preview** downloads a source section at up to 720p, builds the exact proposed
+   multi-span cut, and starts playback automatically.
+5. Mark candidates selected/rejected and export the ones you want. Settings lets
+   you choose the export folder and a maximum of Source, 1080p, 720p, or 480p.
+   Exported clips are stored below a `VOD title [Twitch ID]` folder.
 
 Quick uses local Whisper small, audio peaks, and semantic preference matching.
 Balanced uses Whisper large-v3-turbo plus scene activity. Deep adds denser scene
@@ -69,6 +72,8 @@ Twitch media/API requests and first-time tool/model downloads.
   Whisper text cannot crash on a Windows legacy code page.
 - The windowed GUI initializes safe standard streams for local AI libraries that
   emit progress output even when no console is attached.
+- The package includes Qt's FFmpeg and Windows multimedia backends. Its build gate
+  decodes a real H.264/AAC video, receives a frame, and verifies playback advances.
 - Long repetitive one/two-word music hallucinations are filtered before ranking.
 - Export and preview preparation are cancellable; incomplete export files are
   removed.
