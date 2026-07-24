@@ -155,11 +155,14 @@ Update it whenever a milestone is completed or a material blocker changes.
   transcription workers instead of accidentally launching another GUI.
 - Built and tested the packaged executable:
   - strict packaged diagnostics exited successfully;
-  - real 10-second packaged transcription ran on RTX 5070 CUDA `int8_float16`;
+  - real packaged transcription ran on RTX 5070 CUDA `int8_float16`;
   - packaged parent → packaged child queue execution completed every Quick stage;
+  - the packaged calibrated `rebuild-candidates` command preserved 6/6 recall;
   - packaged GUI process launched and remained healthy.
 - The validated unpacked beta is 2.56 GiB. The ZIP is 1.52 GiB with SHA-256:
-  `005ee5e689a951977f9f20a50151e51f4d9465b92f627e01950bf280468296ab`.
+  `c5e3f6e35df355b1faf8bd095b5f5094db31cdac3301b96daa3607945b43877f`.
+- The final archive contains 3,558 entries; its packaged executable and QML UI were
+  verified in-place, and the generated checksum file matches the 1.515 GiB ZIP.
 - Added `docs/WINDOWS_BETA.md` with install, first-run, Twitch, privacy, recovery, and
   build instructions. Build output remains ignored and is not committed to Git.
 
@@ -188,12 +191,12 @@ Update it whenever a milestone is completed or a material blocker changes.
   clean. All calibration reports, media, transcripts, models, frames, databases, and
   exports remain ignored local data.
 
-## Remaining milestones
+## Optional follow-ups
 
 1. Live Twitch device connection test after a public Client ID is entered.
 2. Optional reliable CPU sensor provider where Windows exposes no package sensor.
-3. Rebuild and revalidate the Windows ZIP with the final calibrated code, then complete
-   the draft PR checkpoint.
+3. Code signing and an installer can be added after beta feedback; the current portable
+   one-folder ZIP is complete and tested.
 
 ## Calibration contract
 
