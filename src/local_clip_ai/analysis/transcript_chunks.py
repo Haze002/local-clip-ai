@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from typing import Any
 
@@ -76,6 +77,8 @@ def merge_transcript_documents(documents: list[dict[str, Any]]) -> dict[str, Any
             continue
         merged.append(segment)
     first = documents[0]
+    unfiltered_count = len(merged)
+    merged = _filter_repetitive_hallucinations(merged)
     return {
         "media_path": first.get("media_path"),
         "model": first.get("model"),
@@ -97,11 +100,46 @@ def merge_transcript_documents(documents: list[dict[str, Any]]) -> dict[str, Any
         "source_offset_seconds": 0,
         "segments": merged,
         "chunk_count": len(documents),
+        "filtered_repetitive_segments": unfiltered_count - len(merged),
     }
 
 
 def _normalized_text(segment: dict[str, Any]) -> str:
-    return " ".join(str(segment.get("text", "")).casefold().split())
+    return " ".join(
+        re.findall(r"[\w']+", str(segment.get("text", "")).casefold(), re.UNICODE)
+    )
+
+
+def _filter_repetitive_hallucinations(
+    segments: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    filtered: list[dict[str, Any]] = []
+    run: list[dict[str, Any]] = []
+    run_text = ""
+
+    def flush() -> None:
+        if not run:
+            return
+        duration = float(run[-1]["end_seconds"]) - float(run[0]["start_seconds"])
+        short_phrase = len(run_text.split()) <= 2 and len(run_text) <= 16
+        if not (len(run) >= 8 and duration >= 20 and short_phrase):
+            filtered.extend(run)
+
+    for segment in segments:
+        normalized = _normalized_text(segment)
+        continues = (
+            bool(run)
+            and normalized == run_text
+            and float(segment["start_seconds"]) - float(run[-1]["end_seconds"]) <= 6
+        )
+        if not continues:
+            flush()
+            run = [segment]
+            run_text = normalized
+        else:
+            run.append(segment)
+    flush()
+    return filtered
 
 
 def _confidence(segment: dict[str, Any]) -> float:

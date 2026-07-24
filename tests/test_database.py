@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import shutil
 import sqlite3
 import uuid
@@ -71,6 +72,18 @@ class DatabaseTests(TestCase):
             journal_mode = connection.execute("PRAGMA journal_mode").fetchone()[0]
 
         self.assertEqual(journal_mode, "wal")
+
+    def test_job_content_profile_can_be_updated_for_local_reranking(self) -> None:
+        database = JobDatabase(self.temporary_path / "jobs.sqlite3")
+        database.initialize()
+        job_id = database.create_job("recording.mp4", content_profile={"max_candidates": 30})
+
+        self.assertTrue(
+            database.update_job_content_profile(job_id, {"max_candidates": 50})
+        )
+
+        profile = json.loads(database.get_job(job_id)["content_profile_json"])
+        self.assertEqual(profile["max_candidates"], 50)
 
     def test_schema_one_database_migrates_without_losing_jobs(self) -> None:
         path = self.temporary_path / "migration.sqlite3"

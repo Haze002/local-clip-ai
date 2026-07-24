@@ -19,7 +19,7 @@ class ContentProfile:
     target_max_seconds: float = 60
     setup_context_seconds: float = 4
     payoff_context_seconds: float = 3
-    max_candidates: int = 30
+    max_candidates: int = 50
     auto_preselect_count: int = 10
 
     def __post_init__(self) -> None:

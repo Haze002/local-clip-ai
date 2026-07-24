@@ -340,6 +340,26 @@ class JobDatabase:
             ).fetchone()
         return dict(row) if row else None
 
+    def update_job_content_profile(
+        self,
+        job_id: str,
+        content_profile: Mapping[str, Any],
+    ) -> bool:
+        with self.transaction() as connection:
+            cursor = connection.execute(
+                """
+                UPDATE jobs
+                SET content_profile_json = ?, updated_at = ?
+                WHERE id = ?
+                """,
+                (
+                    json.dumps(dict(content_profile), sort_keys=True),
+                    _utc_now(),
+                    job_id,
+                ),
+            )
+        return cursor.rowcount == 1
+
     def update_job_status(
         self,
         job_id: str,

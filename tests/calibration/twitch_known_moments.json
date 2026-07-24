@@ -60,7 +60,8 @@
           "start_seconds": 6230,
           "end_seconds": 6310,
           "duration_seconds": 80,
-          "expectation": "highlight"
+          "expectation": "highlight_requiring_condensation",
+          "target_max_seconds": 60
         }
       ]
     }

@@ -8,7 +8,11 @@ from pathlib import Path
 from local_clip_ai import __version__
 from local_clip_ai.analysis import transcribe_media
 from local_clip_ai.analysis.condensation import CondensedSpan
-from local_clip_ai.config import default_analysis_profile, default_content_profile
+from local_clip_ai.config import (
+    ContentProfile,
+    default_analysis_profile,
+    default_content_profile,
+)
 from local_clip_ai.diagnostics import collect_diagnostics
 from local_clip_ai.diagnostics.models import CheckStatus, DiagnosticReport
 from local_clip_ai.media import TimeRange, export_condensed_clip, parse_timecode
@@ -107,6 +111,12 @@ def _parser() -> argparse.ArgumentParser:
     subparsers.add_parser("jobs", help="List jobs in queue order.")
     run_job = subparsers.add_parser("run-job", help="Run one queued or interrupted job.")
     run_job.add_argument("job_id")
+    rebuild_candidates = subparsers.add_parser(
+        "rebuild-candidates",
+        help="Rerun local ranking and condensation without repeating earlier stages.",
+    )
+    rebuild_candidates.add_argument("job_id")
+    rebuild_candidates.add_argument("--max-candidates", type=int)
     subparsers.add_parser("run-queue", help="Run all queued or interrupted jobs.")
     return parser
 
@@ -259,6 +269,20 @@ def main(argv: Sequence[str] | None = None) -> int:
     if command == "run-job":
         PipelineRunner(paths, database, on_event=print).run_job(arguments.job_id)
         return 0 if database.get_job(arguments.job_id)["status"] == "completed" else 1
+
+    if command == "rebuild-candidates":
+        job = database.get_job(arguments.job_id)
+        if job is None:
+            parser.error(f"Job does not exist: {arguments.job_id}")
+        values = json.loads(str(job["content_profile_json"]))
+        if arguments.max_candidates is not None:
+            values["max_candidates"] = arguments.max_candidates
+        profile = ContentProfile(**values)
+        PipelineRunner(paths, database, on_event=print).rebuild_candidates(
+            arguments.job_id,
+            content_profile=profile.to_dict(),
+        )
+        return 0
 
     if command == "run-queue":
         count = PipelineRunner(paths, database, on_event=print).run_all()

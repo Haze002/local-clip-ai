@@ -345,7 +345,7 @@ class PipelineRunner:
         checkpoint = self.database.stage_checkpoint(job_id, "candidates")
         if checkpoint and checkpoint["status"] == "completed":
             return int(checkpoint["checkpoint"].get("candidate_count", 0))
-        self._update_stage(job_id, "candidates", 0.84)
+        self._update_stage(job_id, "candidates", 0.92)
         content_values = json.loads(str(job["content_profile_json"]))
         profile = ContentProfile(**content_values)
         signals_path = self._completed_artifact(job_id, "signals", "audio_evidence")
@@ -439,16 +439,27 @@ class PipelineRunner:
         self._update_stage(job_id, "candidates")
         return len(moments)
 
-    def _analyze_audio(self, job: dict[str, Any], media_path: Path) -> Path:
+    def _analyze_audio(
+        self,
+        job: dict[str, Any],
+        media_path: Path,
+        duration_seconds: float,
+    ) -> Path:
         job_id = str(job["id"])
         existing = self._completed_artifact(job_id, "signals", "audio_evidence")
         if existing:
             return existing
-        self._update_stage(job_id, "signals", 0.84)
+        self._update_stage(job_id, "signals", 0.82)
         evidence = extract_audio_evidence(
             self.paths,
             media_path,
             cancel_requested=lambda: self._stop_requested(job_id),
+            duration_seconds=duration_seconds,
+            on_progress=lambda fraction: self._update_stage(
+                job_id,
+                "signals",
+                0.82 + fraction * 0.04,
+            ),
         )
         output = self.paths.artifacts / job_id / "audio_evidence.json"
         output.parent.mkdir(parents=True, exist_ok=True)
@@ -491,7 +502,12 @@ class PipelineRunner:
             for item in values
         ]
 
-    def _analyze_visual(self, job: dict[str, Any], media_path: Path) -> Path | None:
+    def _analyze_visual(
+        self,
+        job: dict[str, Any],
+        media_path: Path,
+        duration_seconds: float,
+    ) -> Path | None:
         mode = str(job["analysis_mode"])
         if mode == "quick":
             return None
@@ -499,11 +515,18 @@ class PipelineRunner:
         existing = self._completed_artifact(job_id, "signals", "visual_evidence")
         if existing:
             return existing
+        self._update_stage(job_id, "signals", 0.86)
         evidence = extract_visual_evidence(
             self.paths,
             media_path,
             analysis_mode=mode,
             cancel_requested=lambda: self._stop_requested(job_id),
+            duration_seconds=duration_seconds,
+            on_progress=lambda fraction: self._update_stage(
+                job_id,
+                "signals",
+                0.86 + fraction * 0.04,
+            ),
         )
         output = self.paths.artifacts / job_id / "visual_evidence.json"
         output.parent.mkdir(parents=True, exist_ok=True)
@@ -539,8 +562,9 @@ class PipelineRunner:
 
     def _analyze_signals(self, job: dict[str, Any], media_path: Path) -> None:
         job_id = str(job["id"])
-        audio_path = self._analyze_audio(job, media_path)
-        visual_path = self._analyze_visual(job, media_path)
+        duration_seconds = probe_media(self.paths, media_path).duration_seconds
+        audio_path = self._analyze_audio(job, media_path, duration_seconds)
+        visual_path = self._analyze_visual(job, media_path, duration_seconds)
         transcript_path = self._completed_artifact(
             job_id,
             "transcription",
@@ -567,6 +591,7 @@ class PipelineRunner:
         existing = self._completed_artifact(job_id, "signals", "semantic_evidence")
         if existing:
             return existing
+        self._update_stage(job_id, "signals", 0.90)
         profile = ContentProfile(**json.loads(str(job["content_profile_json"])))
         evidence = extract_semantic_evidence(
             self.paths,
@@ -658,6 +683,54 @@ class PipelineRunner:
                 error=str(error),
             )
             self._emit(f"Analysis failed during {stage}: {error}")
+
+    def rebuild_candidates(
+        self,
+        job_id: str,
+        *,
+        content_profile: dict[str, Any] | None = None,
+    ) -> int:
+        """Rerun only ranking/condensation from durable local artifacts."""
+        if content_profile is not None:
+            ContentProfile(**content_profile)
+            if not self.database.update_job_content_profile(job_id, content_profile):
+                raise RuntimeError(f"Job does not exist: {job_id}")
+        job = self._job(job_id)
+        transcript_path = self._completed_artifact(
+            job_id,
+            "transcription",
+            "transcript_json",
+        )
+        media_path = self._completed_artifact(
+            job_id,
+            "acquisition",
+            "analysis_media",
+        )
+        if transcript_path is None or media_path is None:
+            raise RuntimeError(
+                "Candidate rebuild requires completed acquisition and transcription"
+            )
+        self.database.save_stage_checkpoint(
+            job_id,
+            "candidates",
+            {"reason": "manual_rebuild"},
+            status="running",
+        )
+        try:
+            count = self._discover_candidates(job, transcript_path, media_path)
+        except Exception as error:
+            self.database.save_stage_checkpoint(
+                job_id,
+                "candidates",
+                {"reason": "manual_rebuild"},
+                status="failed",
+                error=str(error),
+            )
+            self.database.update_job_status(job_id, "failed", error=str(error))
+            raise
+        self.database.update_job_status(job_id, "completed", progress=1)
+        self._emit(f"Candidate rebuild complete with {count} candidate(s).")
+        return count
 
     def run_all(self) -> int:
         completed = 0

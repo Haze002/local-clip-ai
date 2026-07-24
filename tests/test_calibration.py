@@ -19,7 +19,10 @@ class CalibrationEvaluationTests(unittest.TestCase):
             "end_seconds": 255,
             "score": 0.9,
             "metadata": {"output_duration_seconds": 55},
-            "spans": [{"position": 0}, {"position": 1}],
+            "spans": [
+                {"position": 0, "start_seconds": 110, "end_seconds": 130},
+                {"position": 1, "start_seconds": 200, "end_seconds": 235},
+            ],
         }
 
         result = evaluate_moment("123", moment, [candidate])
@@ -39,13 +42,38 @@ class CalibrationEvaluationTests(unittest.TestCase):
             "end_seconds": 150,
             "score": 0.9,
             "metadata": {"output_duration_seconds": 21},
-            "spans": [{"position": 0}],
+            "spans": [
+                {"position": 0, "start_seconds": 129, "end_seconds": 150},
+            ],
         }
 
         result = evaluate_moment("123", moment, [candidate])
 
         self.assertFalse(result.detected)
         self.assertFalse(result.passed)
+
+    def test_broad_source_window_does_not_pass_when_exported_spans_miss_label(self) -> None:
+        moment = {
+            "start_seconds": 100,
+            "end_seconds": 130,
+            "expectation": "highlight",
+        }
+        candidate = {
+            "start_seconds": 80,
+            "end_seconds": 150,
+            "score": 0.9,
+            "metadata": {"output_duration_seconds": 20},
+            "spans": [
+                {"position": 0, "start_seconds": 80, "end_seconds": 90},
+                {"position": 1, "start_seconds": 140, "end_seconds": 150},
+            ],
+        }
+
+        result = evaluate_moment("123", moment, [candidate])
+
+        self.assertEqual(result.source_overlap_seconds, 30)
+        self.assertEqual(result.output_overlap_seconds, 0)
+        self.assertFalse(result.detected)
 
 
 if __name__ == "__main__":

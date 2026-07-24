@@ -7,11 +7,15 @@ from collections.abc import Callable, Iterable
 from pathlib import Path
 
 from local_clip_ai.analysis.condensation import EvidenceWindow
+from local_clip_ai.analysis.signal_progress import (
+    PTS_TIME,
+    ProgressCallback,
+    metadata_progress_reporter,
+)
 from local_clip_ai.paths import AppPaths
 from local_clip_ai.sources.acquisition import run_cancellable_process
 from local_clip_ai.tools import find_ffmpeg
 
-PTS_TIME = re.compile(r"\bpts_time:(-?\d+(?:\.\d+)?)")
 RMS_LEVEL = re.compile(
     r"lavfi\.astats\.Overall\.RMS_level=(-?\d+(?:\.\d+)?|-inf)",
     re.IGNORECASE,
@@ -82,6 +86,8 @@ def extract_audio_evidence(
     media_path: Path | str,
     *,
     cancel_requested: CancelCheck | None = None,
+    duration_seconds: float | None = None,
+    on_progress: ProgressCallback | None = None,
 ) -> list[EvidenceWindow]:
     ffmpeg, _ = find_ffmpeg(paths)
     if ffmpeg is None:
@@ -107,6 +113,7 @@ def extract_audio_evidence(
     return_code, lines = run_cancellable_process(
         command,
         cancel_requested=cancel_requested,
+        on_output=metadata_progress_reporter(duration_seconds, on_progress),
     )
     readings = parse_audio_rms_lines(lines)
     if return_code or not readings:

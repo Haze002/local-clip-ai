@@ -65,3 +65,45 @@ class CandidateDiscoveryTests(unittest.TestCase):
 
         self.assertEqual(len(candidates), 1)
         self.assertIn("scene", candidates[0].rationale)
+
+    def test_long_group_reserves_focused_subevent_candidates(self) -> None:
+        evidence = [
+            EvidenceWindow(float(second), float(second + 1), score, "audio peak")
+            for second, score in (
+                (0, 0.9),
+                (18, 0.8),
+                (36, 0.8),
+                (54, 0.8),
+                (72, 0.8),
+                (90, 0.8),
+                (108, 0.8),
+                (126, 0.8),
+                (144, 0.8),
+                (162, 0.95),
+            )
+        ]
+
+        candidates = discover_candidates(
+            [],
+            ContentProfile(max_candidates=10),
+            audio_evidence=evidence,
+        )
+
+        self.assertTrue(
+            any(candidate.source_range.duration >= 150 for candidate in candidates)
+        )
+        self.assertTrue(
+            any(candidate.source_range.duration <= 85 for candidate in candidates)
+        )
+
+    def test_repetitive_music_hallucination_is_not_used_as_title(self) -> None:
+        segments = [
+            segment(float(index * 3), float(index * 3 + 2), "I")
+            for index in range(12)
+        ]
+        segments.append(segment(45, 50, "holy shit, that worked!"))
+
+        candidates = discover_candidates(segments, ContentProfile())
+
+        self.assertTrue(candidates)
+        self.assertIn("holy shit", candidates[0].title)

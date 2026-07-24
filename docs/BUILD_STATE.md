@@ -85,6 +85,12 @@ Update it whenever a milestone is completed or a material blocker changes.
   CUDA OOM test and does not discard previous chunks.
 - Added transcript reaction/content scoring, up-to-three-minute event grouping,
   automatic preselection, and chronological multi-span condensation.
+- Candidate discovery now preserves broad story candidates while reserving review
+  capacity for coherent sub-events inside long windows. The default review capacity is
+  50 and automatic preselection remains 10.
+- Long repetitive one/two-word music hallucinations are removed from merged transcripts
+  and candidate titles. Deep visual evidence can boost a candidate but cannot unfairly
+  demote only the subset that received frame analysis.
 - Added candidate review and source-quality FFmpeg/NVENC export.
 - Real local validation completed on the supplied `00:14:50-00:15:20` moment:
   - exact 30.021-second Twitch audio acquisition;
@@ -111,6 +117,8 @@ Update it whenever a milestone is completed or a material blocker changes.
   Quick previews cache a source section that the final export can reuse.
 - Source acquisition and FFmpeg encoding now report real operation progress and can be
   cancelled safely. Partial export files are removed; completed analysis stages remain.
+- Full-VOD audio and scene scans now report throttled stage progress from streamed FFmpeg
+  timestamps, avoiding a seemingly frozen progress value during long Deep runs.
 - Candidate titles now include a useful transcript excerpt when available, and
   explanations combine up to four strongest local speech/audio/visual/semantic reasons.
 - Added Material dark styling, system tray behavior, and completion/export notifications.
@@ -158,19 +166,34 @@ Update it whenever a milestone is completed or a material blocker changes.
 ### Calibration tooling
 
 - Added a machine-readable evaluator for the six user-labeled Twitch moments. It reports
-  recall, score rank, overlap, output duration, and source-span count from the local
-  database without committing media or analysis output.
+  recall, score rank, source-window overlap, actual exported-span overlap, required
+  overlap, output duration, and source-span count from the local database without
+  committing media or analysis output.
 - The 150-second calibration moment is required to fit within 60 seconds and contain
   multiple chronological source spans.
-- The full suite currently passes: 54 tests plus 2 parameterized subtests, with Ruff
-  clean. The two full-VOD Deep runs remain local and resumable while calibration proceeds.
+- Both complete public Twitch VODs were downloaded and processed through Deep mode:
+  VOD `2816862211` used 19 durable transcription chunks and VOD `2823263031` used 8.
+- The final candidate logic detects all six labeled moments using actual output-span
+  overlap: 6/6 recall.
+- The 150-second `01:27:00` case produced four chronological spans (9 + 11 + 16 + 24
+  seconds). The exact plan encoded with NVENC to a decoded, playable 60.000-second H.264
+  and AAC MP4.
+- A real Windows encoding interruption resumed from chunk 6 without repeating the first
+  five chunks. Across the long run, the RTX 5070 remained far below the 90 °C limit and
+  used roughly 4 GiB of its 12 GiB VRAM; deterministic policy tests cover sustained-hot
+  pause and stable-cooldown resume behavior.
+- Candidate-only rebuilding is available through `rebuild-candidates`, so preference and
+  ranking changes reuse completed media, transcript, audio, visual, and semantic stages.
+- The full suite currently passes: 62 tests plus 2 parameterized subtests, with Ruff
+  clean. All calibration reports, media, transcripts, models, frames, databases, and
+  exports remain ignored local data.
 
 ## Remaining milestones
 
 1. Live Twitch device connection test after a public Client ID is entered.
-2. Full calibration against all six supplied moments and long-duration thermal/GPU tests.
-3. Optional reliable CPU sensor provider where Windows exposes no package sensor.
-4. Final green checkpoint, ZIP rebuild if calibration changes code, and PR completion.
+2. Optional reliable CPU sensor provider where Windows exposes no package sensor.
+3. Rebuild and revalidate the Windows ZIP with the final calibrated code, then complete
+   the draft PR checkpoint.
 
 ## Calibration contract
 
@@ -179,7 +202,8 @@ range from `01:27:00` to `01:29:30` in VOD `2823263031` is explicitly marked as 
 condensation case. Its expected result is at most 60 seconds and must be assembled
 from multiple chronological source spans when the scoring evidence supports cuts.
 The algorithm must remove low-value interior regions rather than simply trimming
-one end.
+one end. The 80-second `01:43:50` to `01:45:10` range must also fit the 60-second
+output budget; it may remain one coherent span if that scores best.
 
 ## Resume instructions
 

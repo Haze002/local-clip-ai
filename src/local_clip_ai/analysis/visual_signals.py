@@ -7,11 +7,15 @@ from collections.abc import Callable, Iterable
 from pathlib import Path
 
 from local_clip_ai.analysis.condensation import EvidenceWindow
+from local_clip_ai.analysis.signal_progress import (
+    PTS_TIME,
+    ProgressCallback,
+    metadata_progress_reporter,
+)
 from local_clip_ai.paths import AppPaths
 from local_clip_ai.sources.acquisition import run_cancellable_process
 from local_clip_ai.tools import find_ffmpeg
 
-PTS_TIME = re.compile(r"\bpts_time:(-?\d+(?:\.\d+)?)")
 SCENE_SCORE = re.compile(r"lavfi\.scene_score=(\d+(?:\.\d+)?)", re.IGNORECASE)
 CancelCheck = Callable[[], bool]
 
@@ -54,6 +58,8 @@ def extract_visual_evidence(
     *,
     analysis_mode: str,
     cancel_requested: CancelCheck | None = None,
+    duration_seconds: float | None = None,
+    on_progress: ProgressCallback | None = None,
 ) -> list[EvidenceWindow]:
     if analysis_mode not in {"balanced", "deep"}:
         return []
@@ -84,6 +90,7 @@ def extract_visual_evidence(
     return_code, lines = run_cancellable_process(
         command,
         cancel_requested=cancel_requested,
+        on_output=metadata_progress_reporter(duration_seconds, on_progress),
     )
     if return_code:
         recent_output = "\n".join(lines[-30:])

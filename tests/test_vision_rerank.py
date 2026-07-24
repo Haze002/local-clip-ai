@@ -50,6 +50,17 @@ class VisionRerankTests(unittest.TestCase):
         self.assertFalse(reranked[1].auto_preselected)
         self.assertIn("local vision", reranked[0].rationale)
 
+    def test_ambiguous_frame_does_not_demote_strong_local_evidence(self) -> None:
+        original = candidate(0.8)
+
+        reranked = apply_vision_assessments(
+            [original],
+            [VisionAssessment(0, 0.1, 0.16, 3)],
+            auto_preselect_count=1,
+        )
+
+        self.assertEqual(reranked[0].score, original.score)
+
 
 if __name__ == "__main__":
     unittest.main()

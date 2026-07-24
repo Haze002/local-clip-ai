@@ -64,7 +64,14 @@ def apply_vision_assessments(
         if assessment is None:
             reranked.append(candidate)
             continue
-        score = min(1.0, candidate.score * 0.72 + assessment.score * 0.28)
+        # Only a bounded positive visual signal changes the score. Candidate-only
+        # vision is intentionally run on the provisional top set, so demoting those
+        # while leaving unassessed candidates untouched would make scores incomparable.
+        score = min(
+            1.0,
+            candidate.score
+            + max(0.0, assessment.score - candidate.score) * 0.4,
+        )
         rationale = (
             f"{candidate.rationale}; local vision preference match "
             f"({assessment.similarity:.0%})"
@@ -150,9 +157,13 @@ def rerank_candidates_with_vision(
     frame_paths: list[Path] = []
     frame_candidate_indices: list[int] = []
     for candidate_index, candidate in enumerate(selected):
+        range_token = (
+            f"{round(candidate.source_range.start * 1000):012d}_"
+            f"{round(candidate.source_range.end * 1000):012d}"
+        )
         for frame_index, timestamp in enumerate(candidate_frame_timestamps(candidate)):
             frame = output_directory / (
-                f"candidate_{candidate_index:03d}_frame_{frame_index:02d}.jpg"
+                f"candidate_{range_token}_frame_{frame_index:02d}.jpg"
             )
             _extract_frame(paths, source, timestamp, frame, cancel_requested)
             frame_paths.append(frame)

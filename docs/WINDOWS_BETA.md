@@ -22,6 +22,7 @@ packaged beta. A current NVIDIA display driver is required for GPU acceleration.
 2. Choose Quick, Balanced, or Deep and optionally reuse the previous content
    preference, analysis mode, or both.
 3. Start the queue. The app prevents Windows sleep while the queue is active.
+   Download, transcription, audio, and scene stages report incremental progress.
 4. Review candidates on the Results page. **Preview** builds and plays the exact
    proposed multi-span cut; **Export** retrieves source-quality Twitch media when
    necessary.
@@ -29,7 +30,8 @@ packaged beta. A current NVIDIA display driver is required for GPU acceleration.
 Quick uses local Whisper small, audio peaks, and semantic preference matching.
 Balanced uses Whisper large-v3-turbo plus scene activity. Deep adds denser scene
 signals and candidate-only CLIP visual reranking. Models download on first use
-and remain local.
+and remain local. The default profile keeps up to 50 review candidates and
+preselects the highest-scoring 10; both values are editable.
 
 ## Twitch latest-VOD connection
 
@@ -61,6 +63,7 @@ Twitch media/API requests and first-time tool/model downloads.
 - Interrupted running jobs recover after a Windows/app crash.
 - Configurable GPU/CPU temperature grace and cooldown limits.
 - CUDA allocation failures retry the affected transcription chunk on CPU.
+- Long repetitive one/two-word music hallucinations are filtered before ranking.
 - Export and preview preparation are cancellable; incomplete export files are
   removed.
 

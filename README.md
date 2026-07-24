@@ -3,11 +3,11 @@
 Local Clip AI is a native Windows application for finding promising clips in long
 VODs without uploading the recordings to a third-party analysis service.
 
-The project is currently building toward its first Windows beta. The native
-application already checks the local Python environment, CPU, memory, NVIDIA GPU,
-portable FFmpeg installation, storage, and durable SQLite job database. Twitch
-VOD inspection, resumable queue processing, CUDA transcription, candidate
-condensation, review/export, and resource safeguards are now present on the beta branch.
+The first tested Windows beta is available on the beta branch. The native
+application checks the local environment, CPU, memory, NVIDIA GPU, portable FFmpeg
+installation, storage, and durable SQLite job database. Twitch VOD inspection,
+resumable queue processing, CUDA transcription, candidate condensation,
+review/export, and resource safeguards are included.
 
 This project is not affiliated with StreamLadder or ClipGPT.
 
@@ -96,6 +96,14 @@ Run queued jobs from the CLI:
 .\.venv\Scripts\local-clip-ai.exe --data-dir .local-data add-job `
   "https://www.twitch.tv/videos/2823263031" --mode quick
 .\.venv\Scripts\local-clip-ai.exe --data-dir .local-data run-queue
+```
+
+Change a completed job's content preference or candidate count without repeating
+its download, transcription, or signal scans:
+
+```powershell
+.\.venv\Scripts\local-clip-ai.exe --data-dir .local-data `
+  rebuild-candidates JOB_ID --max-candidates 50
 ```
 
 ## Repository map

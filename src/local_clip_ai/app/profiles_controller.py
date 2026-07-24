@@ -40,7 +40,7 @@ class ProfilesController(QObject):
 
     @Property(int, notify=changed)
     def maxCandidates(self) -> int:
-        return int(self._content.get("max_candidates", 30))
+        return int(self._content.get("max_candidates", 50))
 
     @Property(int, notify=changed)
     def autoPreselectCount(self) -> int:

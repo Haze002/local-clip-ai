@@ -19,9 +19,12 @@ class MomentEvaluation:
     candidate_start_seconds: float | None
     candidate_end_seconds: float | None
     candidate_score: float | None
-    overlap_seconds: float
+    source_overlap_seconds: float
+    output_overlap_seconds: float
+    required_overlap_seconds: float
     output_duration_seconds: float | None
     span_count: int | None
+    matching_span_count: int | None
     condensation_passed: bool
 
     @property
@@ -51,22 +54,41 @@ def evaluate_moment(
     start = float(moment["start_seconds"])
     end = float(moment["end_seconds"])
     ranked = sorted(candidates, key=lambda candidate: float(candidate["score"]), reverse=True)
-    matches = [
-        (
-            rank,
-            candidate,
+    matches = []
+    for rank, candidate in enumerate(ranked, start=1):
+        source_overlap = _overlap_seconds(
+            start,
+            end,
+            float(candidate["start_seconds"]),
+            float(candidate["end_seconds"]),
+        )
+        span_overlaps = [
             _overlap_seconds(
                 start,
                 end,
-                float(candidate["start_seconds"]),
-                float(candidate["end_seconds"]),
-            ),
+                float(span["start_seconds"]),
+                float(span["end_seconds"]),
+            )
+            for span in candidate.get("spans", [])
+            if "start_seconds" in span and "end_seconds" in span
+        ]
+        output_overlap = sum(span_overlaps)
+        matches.append(
+            (
+                rank,
+                candidate,
+                source_overlap,
+                output_overlap,
+                sum(overlap > 0 for overlap in span_overlaps),
+            )
         )
-        for rank, candidate in enumerate(ranked, start=1)
-    ]
-    rank, candidate, overlap = max(matches, key=lambda value: value[2], default=(0, None, 0))
-    required_overlap = min(5.0, (end - start) * 0.2)
-    detected = candidate is not None and overlap >= required_overlap
+    rank, candidate, source_overlap, output_overlap, matching_span_count = max(
+        matches,
+        key=lambda value: (value[3], value[2], float(value[1]["score"])),
+        default=(0, None, 0, 0, 0),
+    )
+    required_overlap = min(20.0, max(5.0, (end - start) * 0.25))
+    detected = candidate is not None and output_overlap >= required_overlap
     output_duration = (
         float(candidate["metadata"].get("output_duration_seconds", 0))
         if detected
@@ -83,7 +105,7 @@ def evaluate_moment(
         )
     if moment.get("require_multiple_source_spans"):
         condensation_passed = condensation_passed and bool(
-            detected and span_count is not None and span_count >= 2
+            detected and matching_span_count >= 2
         )
     return MomentEvaluation(
         video_id=video_id,
@@ -97,9 +119,12 @@ def evaluate_moment(
         ),
         candidate_end_seconds=float(candidate["end_seconds"]) if detected else None,
         candidate_score=float(candidate["score"]) if detected else None,
-        overlap_seconds=overlap,
+        source_overlap_seconds=source_overlap,
+        output_overlap_seconds=output_overlap,
+        required_overlap_seconds=required_overlap,
         output_duration_seconds=output_duration,
         span_count=span_count,
+        matching_span_count=matching_span_count if detected else None,
         condensation_passed=condensation_passed,
     )
 
@@ -120,7 +145,7 @@ def evaluate_manifest(
         )
     passed = sum(evaluation.passed for evaluation in evaluations)
     return {
-        "schema_version": 1,
+        "schema_version": 2,
         "passed": passed,
         "total": len(evaluations),
         "recall": passed / len(evaluations) if evaluations else 0,

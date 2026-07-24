@@ -68,6 +68,39 @@ def _preference_keywords(preference: str) -> set[str]:
     }
 
 
+def _filter_repetitive_transcript_runs(
+    segments: tuple[TranscriptSegment, ...] | list[TranscriptSegment],
+) -> list[TranscriptSegment]:
+    """Drop long one/two-word music hallucinations while retaining real reactions."""
+    filtered: list[TranscriptSegment] = []
+    run: list[TranscriptSegment] = []
+    run_text = ""
+
+    def flush() -> None:
+        if not run:
+            return
+        duration = run[-1].end_seconds - run[0].start_seconds
+        repeated_short_phrase = len(_words(run_text)) <= 2 and len(run_text) <= 16
+        if not (len(run) >= 8 and duration >= 20 and repeated_short_phrase):
+            filtered.extend(run)
+
+    for segment in segments:
+        normalized = " ".join(_words(segment.text))
+        continues = (
+            bool(run)
+            and normalized == run_text
+            and segment.start_seconds - run[-1].end_seconds <= 6
+        )
+        if not continues:
+            flush()
+            run = [segment]
+            run_text = normalized
+        else:
+            run.append(segment)
+    flush()
+    return filtered
+
+
 def _reaction_score(text: str) -> tuple[float, list[str]]:
     lower = text.lower()
     matched = sorted(term for term in REACTION_TERMS if term in lower)
@@ -181,7 +214,8 @@ def _group_evidence(
 
 def _overlap_ratio(first: TimeRange, second: TimeRange) -> float:
     overlap = max(0.0, min(first.end, second.end) - max(first.start, second.start))
-    return overlap / min(first.duration, second.duration)
+    union = max(first.end, second.end) - min(first.start, second.start)
+    return overlap / union
 
 
 def _candidate_title(
@@ -227,11 +261,12 @@ def discover_candidates(
     semantic_evidence: list[EvidenceWindow] | None = None,
     score_threshold: float = 0.36,
 ) -> list[CandidateMoment]:
+    filtered_segments = _filter_repetitive_transcript_runs(segments)
     audio = audio_evidence or []
     visual = visual_evidence or []
     semantic = semantic_evidence or []
     evidence = score_transcript_segments(
-        segments,
+        filtered_segments,
         content_profile,
         audio,
         visual,
@@ -267,47 +302,97 @@ def discover_candidates(
         for item in semantic
         if item.score >= 0.62
     )
-    groups = _group_evidence(
+    broad_groups = _group_evidence(
         evidence,
         threshold=score_threshold,
         max_gap_seconds=55,
         max_source_seconds=180,
     )
-    candidates: list[CandidateMoment] = []
-    for group in groups:
-        start = max(0.0, group[0].start_seconds - content_profile.setup_context_seconds)
-        end = group[-1].end_seconds + content_profile.payoff_context_seconds
-        source_range = TimeRange(start, end)
-        condensation = condense_moment(
-            source_range,
-            group,
-            target_max_seconds=content_profile.target_max_seconds,
-            context_seconds=content_profile.setup_context_seconds,
-        )
-        peak = max(item.score for item in group)
-        mean = sum(item.score for item in group) / len(group)
-        score = min(1.0, peak * 0.7 + mean * 0.3)
-        strongest = max(group, key=lambda item: item.score)
-        candidates.append(
-            CandidateMoment(
-                source_range=source_range,
-                score=score,
-                title=_candidate_title(strongest, segments),
-                rationale=_group_rationale(group),
-                condensation=condensation,
+    focused_groups: list[list[EvidenceWindow]] = []
+    long_groups = [
+        group
+        for group in broad_groups
+        if group[-1].end_seconds - group[0].start_seconds >= 150
+    ]
+    if long_groups:
+        focused_groups = [
+            group
+            for group in _group_evidence(
+                evidence,
+                threshold=score_threshold,
+                max_gap_seconds=20,
+                max_source_seconds=75,
             )
-        )
+            if any(
+                group[0].start_seconds >= broad[0].start_seconds
+                and group[-1].end_seconds <= broad[-1].end_seconds
+                for broad in long_groups
+            )
+        ]
 
+    def build_moments(groups: list[list[EvidenceWindow]]) -> list[CandidateMoment]:
+        moments = []
+        for group in groups:
+            start = max(
+                0.0,
+                group[0].start_seconds - content_profile.setup_context_seconds,
+            )
+            end = group[-1].end_seconds + content_profile.payoff_context_seconds
+            source_range = TimeRange(start, end)
+            condensation = condense_moment(
+                source_range,
+                group,
+                target_max_seconds=content_profile.target_max_seconds,
+                context_seconds=content_profile.setup_context_seconds,
+            )
+            peak = max(item.score for item in group)
+            mean = sum(item.score for item in group) / len(group)
+            score = min(1.0, peak * 0.7 + mean * 0.3)
+            strongest = max(group, key=lambda item: item.score)
+            moments.append(
+                CandidateMoment(
+                    source_range=source_range,
+                    score=score,
+                    title=_candidate_title(strongest, filtered_segments),
+                    rationale=_group_rationale(group),
+                    condensation=condensation,
+                )
+            )
+        return moments
+
+    broad_candidates = build_moments(broad_groups)
+    focused_candidates = build_moments(focused_groups)
     ranked: list[CandidateMoment] = []
-    for candidate in sorted(candidates, key=lambda item: item.score, reverse=True):
-        if any(
-            _overlap_ratio(candidate.source_range, existing.source_range) >= 0.7
-            for existing in ranked
-        ):
-            continue
-        ranked.append(candidate)
-        if len(ranked) >= content_profile.max_candidates:
-            break
+    focused_limit = (
+        max(1, content_profile.max_candidates // 5) if focused_candidates else 0
+    )
+    broad_limit = content_profile.max_candidates - focused_limit
+
+    def append_pool(pool: list[CandidateMoment], limit: int) -> None:
+        added = 0
+        for candidate in sorted(pool, key=lambda item: item.score, reverse=True):
+            if added >= limit:
+                break
+            if any(
+                _overlap_ratio(candidate.source_range, existing.source_range) >= 0.7
+                for existing in ranked
+            ):
+                continue
+            ranked.append(candidate)
+            added += 1
+
+    append_pool(broad_candidates, broad_limit)
+    append_pool(focused_candidates, focused_limit)
+    if len(ranked) < content_profile.max_candidates:
+        append_pool(
+            [
+                candidate
+                for candidate in [*broad_candidates, *focused_candidates]
+                if candidate not in ranked
+            ],
+            content_profile.max_candidates - len(ranked),
+        )
+    ranked.sort(key=lambda item: item.score, reverse=True)
     return [
         CandidateMoment(
             source_range=item.source_range,
