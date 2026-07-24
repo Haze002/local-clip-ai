@@ -11,7 +11,7 @@ from local_clip_ai.analysis.condensation import (
 )
 from local_clip_ai.analysis.transcription import TranscriptSegment
 from local_clip_ai.config import ContentProfile
-from local_clip_ai.media.timecodes import TimeRange
+from local_clip_ai.media.timecodes import TimeRange, format_timecode
 
 REACTION_TERMS = {
     "amazing",
@@ -184,6 +184,40 @@ def _overlap_ratio(first: TimeRange, second: TimeRange) -> float:
     return overlap / min(first.duration, second.duration)
 
 
+def _candidate_title(
+    strongest: EvidenceWindow,
+    segments: tuple[TranscriptSegment, ...] | list[TranscriptSegment],
+) -> str:
+    overlapping = [
+        segment
+        for segment in segments
+        if segment.end_seconds > strongest.start_seconds
+        and segment.start_seconds < strongest.end_seconds
+        and segment.text.strip()
+    ]
+    if not overlapping:
+        return f"Visual/audio highlight at {format_timecode(strongest.start_seconds)}"
+    excerpt = max(
+        overlapping,
+        key=lambda segment: min(segment.end_seconds, strongest.end_seconds)
+        - max(segment.start_seconds, strongest.start_seconds),
+    ).text.strip()
+    if len(excerpt) > 64:
+        excerpt = excerpt[:61].rstrip() + "..."
+    return f"{format_timecode(strongest.start_seconds)} — {excerpt}"
+
+
+def _group_rationale(group: list[EvidenceWindow]) -> str:
+    reasons = []
+    for item in sorted(group, key=lambda value: value.score, reverse=True):
+        reason = item.rationale.strip()
+        if reason and reason.casefold() not in {value.casefold() for value in reasons}:
+            reasons.append(reason)
+        if len(reasons) >= 4:
+            break
+    return "; ".join(reasons) or "combined local evidence"
+
+
 def discover_candidates(
     segments: tuple[TranscriptSegment, ...] | list[TranscriptSegment],
     content_profile: ContentProfile,
@@ -258,8 +292,8 @@ def discover_candidates(
             CandidateMoment(
                 source_range=source_range,
                 score=score,
-                title=f"Highlight near {strongest.start_seconds:.0f}s",
-                rationale=strongest.rationale,
+                title=_candidate_title(strongest, segments),
+                rationale=_group_rationale(group),
                 condensation=condensation,
             )
         )

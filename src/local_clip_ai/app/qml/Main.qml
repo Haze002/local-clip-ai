@@ -4,6 +4,7 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Controls.Material
 import QtQuick.Layouts
+import QtMultimedia
 
 ApplicationWindow {
     id: window
@@ -340,6 +341,7 @@ ApplicationWindow {
                                 required property real jobProgress
                                 required property string jobStage
                                 required property string jobPauseReason
+                                required property int jobPosition
                                 width: parent.width
                                 height: 102
                                 radius: 12
@@ -391,6 +393,20 @@ ApplicationWindow {
                                         font.weight: Font.Bold
                                     }
 
+                                    ToolButton {
+                                        text: "↑"
+                                        enabled: !queueController.running && jobPosition > 0
+                                        onClicked: queueController.moveUp(jobId)
+                                        ToolTip.visible: hovered
+                                        ToolTip.text: "Move earlier"
+                                    }
+                                    ToolButton {
+                                        text: "↓"
+                                        enabled: !queueController.running
+                                        onClicked: queueController.moveDown(jobId)
+                                        ToolTip.visible: hovered
+                                        ToolTip.text: "Move later"
+                                    }
                                     Button {
                                         text: jobStatus === "paused" || jobStatus === "interrupted"
                                               || jobStatus === "failed" ? "Resume" : "Pause"
@@ -417,6 +433,16 @@ ApplicationWindow {
         }
 
         Item {
+            AudioOutput {
+                id: previewAudio
+            }
+            MediaPlayer {
+                id: previewPlayer
+                source: resultsController.previewSource
+                audioOutput: previewAudio
+                videoOutput: previewVideo
+            }
+
             ColumnLayout {
                 anchors.fill: parent
                 anchors.margins: 30
@@ -456,6 +482,101 @@ ApplicationWindow {
                         color: resultsController.noticeIsError ? "#ff9aa6" : "#7de4a9"
                         elide: Text.ElideMiddle
                         horizontalAlignment: Text.AlignHCenter
+                    }
+                }
+
+                Rectangle {
+                    visible: resultsController.previewSource.toString().length > 0
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: visible ? 300 : 0
+                    radius: 12
+                    color: "#080c12"
+                    border.width: 1
+                    border.color: "#26364d"
+
+                    RowLayout {
+                        anchors.fill: parent
+                        anchors.margins: 12
+                        spacing: 12
+
+                        VideoOutput {
+                            id: previewVideo
+                            Layout.fillWidth: true
+                            Layout.fillHeight: true
+                            fillMode: VideoOutput.PreserveAspectFit
+                        }
+
+                        ColumnLayout {
+                            Layout.preferredWidth: 190
+                            Layout.fillHeight: true
+                            Label {
+                                Layout.fillWidth: true
+                                text: resultsController.previewTitle
+                                color: "#f4f7fb"
+                                font.weight: Font.DemiBold
+                                wrapMode: Text.WordWrap
+                            }
+                            Label {
+                                text: Math.round(previewPlayer.position / 1000) + "s / "
+                                      + Math.round(previewPlayer.duration / 1000) + "s"
+                                color: "#8792a5"
+                            }
+                            Slider {
+                                Layout.fillWidth: true
+                                from: 0
+                                to: Math.max(1, previewPlayer.duration)
+                                value: previewPlayer.position
+                                onMoved: previewPlayer.setPosition(value)
+                            }
+                            RowLayout {
+                                Button {
+                                    text: previewPlayer.playbackState
+                                          === MediaPlayer.PlayingState ? "Pause" : "Play"
+                                    onClicked: {
+                                        if (previewPlayer.playbackState
+                                                === MediaPlayer.PlayingState)
+                                            previewPlayer.pause()
+                                        else
+                                            previewPlayer.play()
+                                    }
+                                }
+                                Button {
+                                    text: "Close"
+                                    onClicked: {
+                                        previewPlayer.stop()
+                                        resultsController.closePreview()
+                                    }
+                                }
+                            }
+                            Item { Layout.fillHeight: true }
+                            Label {
+                                Layout.fillWidth: true
+                                text: "This preview already applies the proposed "
+                                      + "multi-span cuts."
+                                color: "#657188"
+                                font.pixelSize: 10
+                                wrapMode: Text.WordWrap
+                            }
+                        }
+                    }
+                }
+
+                RowLayout {
+                    visible: resultsController.exporting || resultsController.previewing
+                    Layout.fillWidth: true
+                    ProgressBar {
+                        Layout.fillWidth: true
+                        from: 0
+                        to: 1
+                        value: resultsController.operationProgress
+                    }
+                    Label {
+                        text: Math.round(resultsController.operationProgress * 100) + "%"
+                        color: "#a2adbd"
+                    }
+                    Button {
+                        text: "Cancel operation"
+                        onClicked: resultsController.cancelCurrentOperation()
                     }
                 }
 
@@ -512,10 +633,12 @@ ApplicationWindow {
                                         spacing: 4
                                         RowLayout {
                                             Label {
+                                                Layout.fillWidth: true
                                                 text: candidateTitle
                                                 color: "#f4f7fb"
                                                 font.pixelSize: 14
                                                 font.weight: Font.DemiBold
+                                                elide: Text.ElideRight
                                             }
                                             Label {
                                                 visible: candidatePreselected
@@ -537,6 +660,8 @@ ApplicationWindow {
                                             text: candidateRationale
                                             color: "#69778c"
                                             font.pixelSize: 11
+                                            wrapMode: Text.WordWrap
+                                            maximumLineCount: 2
                                             elide: Text.ElideRight
                                         }
                                         Label {
@@ -548,19 +673,43 @@ ApplicationWindow {
                                         }
                                     }
 
-                                    Button {
-                                        text: candidateStatus === "selected" ? "Selected" : "Select"
-                                        onClicked: resultsController.review(candidateId, "selected")
-                                    }
-                                    Button {
-                                        text: "Reject"
-                                        onClicked: resultsController.review(candidateId, "rejected")
-                                    }
-                                    Button {
-                                        text: candidateStatus === "exported" ? "Exported" : "Export"
-                                        enabled: !resultsController.exporting
-                                                 && candidateStatus !== "exported"
-                                        onClicked: resultsController.exportCandidate(candidateId)
+                                    GridLayout {
+                                        columns: 2
+                                        Layout.preferredWidth: 190
+                                        rowSpacing: 4
+                                        columnSpacing: 4
+
+                                        Button {
+                                            Layout.fillWidth: true
+                                            text: "Preview"
+                                            enabled: !resultsController.exporting
+                                                     && !resultsController.previewing
+                                            onClicked: resultsController.previewCandidate(candidateId)
+                                        }
+                                        Button {
+                                            Layout.fillWidth: true
+                                            text: candidateStatus === "selected"
+                                                  ? "Selected" : "Select"
+                                            onClicked: resultsController.review(
+                                                candidateId, "selected"
+                                            )
+                                        }
+                                        Button {
+                                            Layout.fillWidth: true
+                                            text: "Reject"
+                                            onClicked: resultsController.review(
+                                                candidateId, "rejected"
+                                            )
+                                        }
+                                        Button {
+                                            Layout.fillWidth: true
+                                            text: candidateStatus === "exported"
+                                                  ? "Exported" : "Export"
+                                            enabled: !resultsController.exporting
+                                                     && !resultsController.previewing
+                                                     && candidateStatus !== "exported"
+                                            onClicked: resultsController.exportCandidate(candidateId)
+                                        }
                                     }
                                 }
                             }
@@ -955,6 +1104,14 @@ ApplicationWindow {
                                 value: resourceController.graceSeconds
                                 editable: true
                                 onValueModified: resourceController.setGraceSeconds(value)
+                            }
+                            Label { text: "Resume stable sec"; color: "#aab3c2" }
+                            SpinBox {
+                                from: 5
+                                to: 900
+                                value: resourceController.stableSeconds
+                                editable: true
+                                onValueModified: resourceController.setStableSeconds(value)
                             }
                             Label { text: "VRAM soft GiB"; color: "#aab3c2" }
                             SpinBox {

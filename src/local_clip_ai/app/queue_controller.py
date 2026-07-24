@@ -38,6 +38,7 @@ class JobListModel(QAbstractListModel):
     ProgressRole = Qt.ItemDataRole.UserRole + 5
     StageRole = Qt.ItemDataRole.UserRole + 6
     PauseReasonRole = Qt.ItemDataRole.UserRole + 7
+    PositionRole = Qt.ItemDataRole.UserRole + 8
 
     def __init__(self, parent: QObject | None = None):
         super().__init__(parent)
@@ -52,6 +53,7 @@ class JobListModel(QAbstractListModel):
             self.ProgressRole: QByteArray(b"jobProgress"),
             self.StageRole: QByteArray(b"jobStage"),
             self.PauseReasonRole: QByteArray(b"jobPauseReason"),
+            self.PositionRole: QByteArray(b"jobPosition"),
         }
 
     def rowCount(self, parent: QModelIndex = INVALID_MODEL_INDEX) -> int:
@@ -69,6 +71,7 @@ class JobListModel(QAbstractListModel):
             self.ProgressRole: float(job.get("progress") or 0),
             self.StageRole: job.get("current_stage") or "Waiting",
             self.PauseReasonRole: job.get("paused_reason") or "",
+            self.PositionRole: int(job.get("queue_position") or 0),
         }
         return values.get(role)
 
@@ -259,6 +262,26 @@ class QueueController(QObject):
         if self._database.request_cancel(job_id):
             self._set_notice("Cancellation requested; completed stages will be preserved.", False)
             self.refresh()
+
+    @Slot(str)
+    def moveUp(self, job_id: str) -> None:
+        job = self._database.get_job(job_id)
+        if job and self._database.move_job(
+            job_id,
+            max(0, int(job["queue_position"]) - 1),
+        ):
+            self.refresh()
+            self._set_notice("Queue order updated.", False)
+
+    @Slot(str)
+    def moveDown(self, job_id: str) -> None:
+        job = self._database.get_job(job_id)
+        if job and self._database.move_job(
+            job_id,
+            int(job["queue_position"]) + 1,
+        ):
+            self.refresh()
+            self._set_notice("Queue order updated.", False)
 
     @Slot()
     def startQueue(self) -> None:

@@ -104,6 +104,15 @@ Update it whenever a milestone is completed or a material blocker changes.
 - Added editable default content preference, language, duration, candidate count, and
   automatic-preselection settings.
 - Results can be selected, rejected, or exported; all state remains in local SQLite.
+- Added queue Up/Down controls while the runner is idle.
+- Added a native Qt Multimedia review player. Preparing a preview applies the exact
+  proposed chronological multi-span cut plan and stores the preview only under ignored
+  local artifacts. Balanced/Deep previews reuse downloaded analysis video when possible;
+  Quick previews cache a source section that the final export can reuse.
+- Source acquisition and FFmpeg encoding now report real operation progress and can be
+  cancelled safely. Partial export files are removed; completed analysis stages remain.
+- Candidate titles now include a useful transcript excerpt when available, and
+  explanations combine up to four strongest local speech/audio/visual/semantic reasons.
 - Added Material dark styling, system tray behavior, and completion/export notifications.
 
 ### Milestone 5 - resource and interruption safety
@@ -115,6 +124,8 @@ Update it whenever a milestone is completed or a material blocker changes.
   temperature, cooldown stability, and VRAM soft limit.
 - Defaults implement the requested behavior: 90 °C pause limit, 120-second grace,
   82 °C resume point, and 30-second stable cooldown.
+- GPU/CPU limits, high-temperature grace time, stable cooldown duration, and VRAM soft
+  limit are editable and persisted from the Monitor page.
 - Added Windows sleep inhibition only while the queue runner is active.
 - CPU package temperature is shown when the operating system exposes it; it is marked
   unavailable on the current Ryzen/Windows configuration rather than displaying a false
@@ -122,11 +133,10 @@ Update it whenever a milestone is completed or a material blocker changes.
 
 ## Remaining milestones
 
-1. Preview playback, richer explanations, export progress/cancellation, and queue reorder UI.
-2. Live Twitch device connection test after a public Client ID is entered.
-3. Full calibration against all six supplied moments and long-duration thermal/GPU tests.
-4. Optional reliable CPU sensor provider where Windows exposes no package sensor.
-5. Windows packaging, beta installation docs, final green checkpoints, and PR completion.
+1. Live Twitch device connection test after a public Client ID is entered.
+2. Full calibration against all six supplied moments and long-duration thermal/GPU tests.
+3. Optional reliable CPU sensor provider where Windows exposes no package sensor.
+4. Windows packaging, beta installation docs, final green checkpoints, and PR completion.
 
 ## Calibration contract
 

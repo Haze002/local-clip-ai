@@ -65,7 +65,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     results_controller.exportFinished.connect(
         lambda value, failed: tray_controller.notify(
             "Local Clip AI export",
-            f"Failed: {value}" if failed else f"Saved: {value}",
+            (
+                "Export cancelled by user."
+                if value == "__cancelled__"
+                else (f"Failed: {value}" if failed else f"Saved: {value}")
+            ),
         )
     )
 

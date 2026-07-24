@@ -1,14 +1,21 @@
 from __future__ import annotations
 
 import os
+import re
 import subprocess
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
 
 from local_clip_ai.media.probe import MediaProbe, probe_media
 from local_clip_ai.paths import AppPaths
+from local_clip_ai.sources.acquisition import run_cancellable_process
 from local_clip_ai.tools import find_ffmpeg
+
+CancelCheck = Callable[[], bool]
+ProgressCallback = Callable[[float], None]
+OUT_TIME = re.compile(r"out_time_(?:us|ms)=(\d+)")
 
 
 class SpanLike(Protocol):
@@ -85,8 +92,21 @@ def _run_export(
     partial: Path,
     filter_graph: str,
     encoder: str,
-) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(
+    expected_duration_seconds: float,
+    cancel_requested: CancelCheck | None,
+    on_progress: ProgressCallback | None,
+) -> tuple[int, list[str]]:
+    def output(line: str) -> None:
+        if not on_progress:
+            return
+        match = OUT_TIME.fullmatch(line.strip())
+        if match:
+            elapsed_seconds = int(match.group(1)) / 1_000_000
+            on_progress(min(0.99, elapsed_seconds / expected_duration_seconds))
+        elif line.strip() == "progress=end":
+            on_progress(1.0)
+
+    return run_cancellable_process(
         [
             str(ffmpeg),
             "-hide_banner",
@@ -107,14 +127,13 @@ def _run_export(
             "192k",
             "-movflags",
             "+faststart",
+            "-progress",
+            "pipe:1",
+            "-nostats",
             str(partial),
         ],
-        check=False,
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        errors="replace",
-        timeout=3600,
+        cancel_requested=cancel_requested,
+        on_output=output,
     )
 
 
@@ -126,6 +145,8 @@ def export_condensed_clip(
     *,
     source_offset_seconds: float = 0,
     overwrite: bool = False,
+    cancel_requested: CancelCheck | None = None,
+    on_progress: ProgressCallback | None = None,
 ) -> ExportResult:
     source_path = Path(source).expanduser().resolve()
     output = Path(destination).expanduser().resolve()
@@ -145,31 +166,45 @@ def export_condensed_clip(
     encoders = _available_encoders(ffmpeg)
     preferred_encoder = "h264_nvenc" if "h264_nvenc" in encoders else "mpeg4"
     partial = output.with_name(f".{output.stem}.partial{output.suffix}")
-    completed = _run_export(
-        ffmpeg,
-        source_path,
-        partial,
-        filter_graph,
-        preferred_encoder,
-    )
-    encoder = preferred_encoder
-    if completed.returncode and preferred_encoder == "h264_nvenc":
-        partial.unlink(missing_ok=True)
-        encoder = "mpeg4"
-        completed = _run_export(
+    expected_duration = sum(span.duration_seconds for span in spans)
+    try:
+        return_code, lines = _run_export(
             ffmpeg,
             source_path,
             partial,
             filter_graph,
-            encoder,
+            preferred_encoder,
+            expected_duration,
+            cancel_requested,
+            on_progress,
         )
-    if completed.returncode:
+    except Exception:
         partial.unlink(missing_ok=True)
-        error = completed.stderr.strip() or "Unknown FFmpeg export error"
+        raise
+    encoder = preferred_encoder
+    if return_code and preferred_encoder == "h264_nvenc":
+        partial.unlink(missing_ok=True)
+        encoder = "mpeg4"
+        try:
+            return_code, lines = _run_export(
+                ffmpeg,
+                source_path,
+                partial,
+                filter_graph,
+                encoder,
+                expected_duration,
+                cancel_requested,
+                on_progress,
+            )
+        except Exception:
+            partial.unlink(missing_ok=True)
+            raise
+    if return_code:
+        partial.unlink(missing_ok=True)
+        error = "\n".join(lines[-40:]).strip() or "Unknown FFmpeg export error"
         raise RuntimeError(f"FFmpeg export failed: {error[-4000:]}")
     os.replace(partial, output)
     output_probe = probe_media(paths, output)
-    expected_duration = sum(span.duration_seconds for span in spans)
     if abs(output_probe.duration_seconds - expected_duration) > max(1.0, expected_duration * 0.03):
         raise RuntimeError(
             f"Export duration was {output_probe.duration_seconds:.2f}s; "

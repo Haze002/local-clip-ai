@@ -3,7 +3,7 @@ from __future__ import annotations
 import unittest
 
 from local_clip_ai.analysis.condensation import CondensedSpan
-from local_clip_ai.media.export import build_concat_filter
+from local_clip_ai.media.export import OUT_TIME, build_concat_filter
 
 
 class ExportTests(unittest.TestCase):
@@ -29,3 +29,9 @@ class ExportTests(unittest.TestCase):
                     CondensedSpan(19, 30, 0.8, "two"),
                 ]
             )
+
+    def test_progress_pattern_accepts_ffmpeg_microsecond_output(self) -> None:
+        match = OUT_TIME.fullmatch("out_time_us=12500000")
+
+        self.assertIsNotNone(match)
+        self.assertEqual(int(match.group(1)) / 1_000_000, 12.5)

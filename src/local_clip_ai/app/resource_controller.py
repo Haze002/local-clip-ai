@@ -186,6 +186,12 @@ class ResourceController(QObject):
         self._database.set_setting("thermal.grace_seconds", self._grace_seconds)
         self.policyChanged.emit()
 
+    @Slot(int)
+    def setStableSeconds(self, value: int) -> None:
+        self._stable_seconds = max(5, min(900, value))
+        self._database.set_setting("thermal.stable_seconds", self._stable_seconds)
+        self.policyChanged.emit()
+
     @Slot(float)
     def setVramSoftLimitGib(self, value: float) -> None:
         self._vram_soft_limit_gib = max(1, min(64, value))

@@ -30,6 +30,7 @@ class CandidateDiscoveryTests(unittest.TestCase):
         self.assertGreaterEqual(len(candidates), 1)
         self.assertTrue(candidates[0].auto_preselected)
         self.assertIn("reaction", candidates[0].rationale)
+        self.assertIn("what the fuck", candidates[0].title)
         self.assertLessEqual(
             candidates[0].condensation.output_duration_seconds,
             60,
