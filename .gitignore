@@ -1,0 +1,73 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyd
+*.so
+.Python
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+.coverage
+coverage.xml
+htmlcov/
+
+# IDE and operating-system files
+.idea/
+.vscode/
+*.user
+*.suo
+.DS_Store
+Thumbs.db
+
+# Build and packaging output
+build/
+dist/
+*.egg-info/
+*.spec
+
+# Local configuration and credentials
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+
+# Local Clip AI runtime data
+.local-data/
+data/
+models/
+cache/
+downloads/
+exports/
+transcripts/
+artifacts/
+logs/
+temp/
+tmp/
+*.db
+*.db-*
+*.sqlite
+*.sqlite-*
+
+# AI model weights
+*.gguf
+*.safetensors
+*.ckpt
+*.pt
+*.pth
+*.onnx
+
+# Source VODs, media intermediates, and generated clips
+*.mp4
+*.mkv
+*.mov
+*.avi
+*.webm
+*.m4v
+*.wav
+*.flac
+*.mp3
+*.aac
+*.m4a
+

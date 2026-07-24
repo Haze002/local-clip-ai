@@ -1,0 +1,61 @@
+[build-system]
+requires = ["setuptools>=75", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "local-clip-ai"
+version = "0.1.0"
+description = "Native Windows application for private, local VOD analysis and clip discovery."
+readme = "README.md"
+requires-python = ">=3.12,<3.13"
+license = { text = "All rights reserved" }
+authors = [{ name = "Haze002" }]
+classifiers = [
+    "Development Status :: 2 - Pre-Alpha",
+    "Environment :: Win32 (MS Windows)",
+    "Operating System :: Microsoft :: Windows :: Windows 11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Multimedia :: Video",
+]
+dependencies = [
+    "PySide6>=6.8,<7",
+    "psutil>=6.1,<8",
+    "nvidia-ml-py>=12.560,<14",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.3,<10",
+    "pytest-cov>=6,<8",
+    "ruff>=0.9,<1",
+]
+transcription = [
+    "faster-whisper>=1.1,<2",
+]
+
+[project.scripts]
+local-clip-ai = "local_clip_ai.cli:main"
+
+[project.gui-scripts]
+local-clip-ai-gui = "local_clip_ai.app.main:main"
+
+[tool.setuptools]
+package-dir = { "" = "src" }
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+"local_clip_ai.app" = ["qml/*.qml"]
+
+[tool.pytest.ini_options]
+addopts = "-ra"
+testpaths = ["tests"]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+
