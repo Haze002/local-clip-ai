@@ -114,6 +114,16 @@ if (-not $unicodeHex.Contains($expectedUnicodeHex)) {
     throw "Packaged Unicode worker smoke test did not preserve non-locale text."
 }
 
+$guiStdioProcess = Start-Process `
+    -FilePath (Join-Path $applicationDirectory "LocalClipAI.exe") `
+    -ArgumentList @("--frozen-gui-stdio-smoke") `
+    -WindowStyle Hidden `
+    -Wait `
+    -PassThru
+if ($guiStdioProcess.ExitCode -ne 0) {
+    throw "Packaged no-console GUI stream smoke test failed."
+}
+
 if (-not $SkipArchive) {
     if (Test-Path -LiteralPath $archivePath) {
         Remove-Item -LiteralPath $archivePath -Force

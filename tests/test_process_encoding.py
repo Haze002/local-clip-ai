@@ -45,6 +45,17 @@ class ProcessEncodingTests(unittest.TestCase):
             ["clip: naïve café — 日本語 下"],
         )
 
+    def test_frozen_gui_initializes_missing_standard_streams(self) -> None:
+        with (
+            patch.object(sys, "stdout", None),
+            patch.object(sys, "stderr", None),
+        ):
+            configure_utf8_standard_streams()
+            self.assertIsNotNone(sys.stdout)
+            self.assertIsNotNone(sys.stderr)
+            sys.stdout.write("GUI stdout ready")
+            sys.stderr.write("GUI stderr ready")
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -7,6 +7,7 @@ from contextlib import ExitStack
 from typing import Any
 
 _NULL_STREAMS = ExitStack()
+GUI_STDIO_SMOKE_ARGUMENT = "--frozen-gui-stdio-smoke"
 
 
 def _utf8_stream(stream: Any) -> Any:
@@ -35,9 +36,15 @@ def configure_utf8_standard_streams() -> None:
 
 def main(argv: Sequence[str] | None = None) -> int:
     arguments = list(argv if argv is not None else sys.argv[1:])
+    configure_utf8_standard_streams()
+    if GUI_STDIO_SMOKE_ARGUMENT in arguments:
+        sys.stdout.write("Local Clip AI GUI stdout ready.\n")
+        sys.stderr.write("Local Clip AI GUI stderr ready.\n")
+        sys.stdout.flush()
+        sys.stderr.flush()
+        return 0
     if "--worker-cli" in arguments:
         arguments.remove("--worker-cli")
-        configure_utf8_standard_streams()
         from local_clip_ai.cli import main as cli_main
 
         return cli_main(arguments)

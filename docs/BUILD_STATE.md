@@ -6,7 +6,7 @@ Update it whenever a milestone is completed or a material blocker changes.
 ## Current checkpoint
 
 - Branch: `agent/end-to-end-build`
-- Phase: Milestones 1-2 complete; Milestones 3-5 substantially implemented
+- Phase: Milestones 1-9 complete; tested Windows beta available
 - Last updated: 2026-07-24
 - GitHub media/model state: clean by design; all runtime artifacts remain ignored
 
@@ -213,6 +213,31 @@ Update it whenever a milestone is completed or a material blocker changes.
   SHA-256:
   `c414542bc6238de12b6b878027124eb47a9af7c9b5f73e0b0f12f21b91b63d5e`.
 
+### Milestone 9 - Packaged GUI stream-safety hotfix
+
+- Resuming the real Balanced job for VOD `2823263031` completed all eight durable
+  transcription chunks plus audio and visual evidence, then exposed a second
+  no-console boundary during the semantic `signals` stage:
+  `'NoneType' object has no attribute 'write'`.
+- The windowed PyInstaller process has no native stdout/stderr streams. FastEmbed/ONNX
+  progress logging attempted to write through one of those `None` streams while loading
+  local semantic analysis.
+- Version 0.1.3 now initializes UTF-8-safe standard streams before either the GUI or
+  worker entry path. Missing windowed streams are backed by the Windows null device;
+  existing redirected streams retain UTF-8 with `backslashreplace`.
+- The build runs a real hidden, no-console packaged GUI stream smoke test and requires
+  a zero exit code before creating the ZIP. A regression test also starts from
+  `sys.stdout = None` and `sys.stderr = None` and verifies both streams are writable.
+- Unexpected pipeline failures now append a full traceback to the job's ignored local
+  log while the database and UI continue to store a concise error.
+- The user's failed job remains safely checkpointed at 90 percent with the VOD,
+  analysis media, eight transcript chunks, merged transcript, audio evidence, and
+  visual evidence preserved. Resume under v0.1.3 reuses all completed stages and
+  continues at local semantic ranking/candidate generation.
+- The v0.1.3 ZIP is 1.651 GiB (1,772,328,056 bytes). Its packaged version probe returned
+  `0.1.3` with empty stderr, and its generated checksum matches SHA-256:
+  `ee1589e7e7e63968bb7c68d44fd67d232ff0a426812b1f5f7689d4f158cc72d6`.
+
 ### Calibration tooling
 
 - Added a machine-readable evaluator for the six user-labeled Twitch moments. It reports
@@ -234,7 +259,7 @@ Update it whenever a milestone is completed or a material blocker changes.
   pause and stable-cooldown resume behavior.
 - Candidate-only rebuilding is available through `rebuild-candidates`, so preference and
   ranking changes reuse completed media, transcript, audio, visual, and semantic stages.
-- The full suite currently passes: 64 tests plus 2 parameterized subtests, with Ruff
+- The full suite currently passes: 65 tests plus 2 parameterized subtests, with Ruff
   clean. All calibration reports, media, transcripts, models, frames, databases, and
   exports remain ignored local data.
 

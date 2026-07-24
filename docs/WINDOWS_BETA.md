@@ -67,6 +67,8 @@ Twitch media/API requests and first-time tool/model downloads.
 - CUDA allocation failures retry the affected transcription chunk on CPU.
 - Packaged transcription workers force UTF-8 output, so arbitrary multilingual
   Whisper text cannot crash on a Windows legacy code page.
+- The windowed GUI initializes safe standard streams for local AI libraries that
+  emit progress output even when no console is attached.
 - Long repetitive one/two-word music hallucinations are filtered before ranking.
 - Export and preview preparation are cancellable; incomplete export files are
   removed.

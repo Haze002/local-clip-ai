@@ -4,6 +4,7 @@ import json
 import os
 import re
 import sys
+import traceback
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
@@ -668,6 +669,10 @@ class PipelineRunner:
         except AcquisitionCancelled:
             self._handle_stop(job_id)
         except Exception as error:
+            with (self.paths.logs / f"{job_id}.log").open("a", encoding="utf-8") as log:
+                log.write("\n--- Pipeline failure traceback ---\n")
+                log.write(traceback.format_exc())
+                log.write("\n")
             current = self._job(job_id)
             stage = str(current.get("current_stage") or "unknown")
             self.database.save_stage_checkpoint(
