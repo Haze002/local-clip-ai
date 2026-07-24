@@ -20,6 +20,7 @@ from local_clip_ai.app.profiles_controller import ProfilesController
 from local_clip_ai.app.queue_controller import JobListModel, QueueController
 from local_clip_ai.app.resource_controller import ResourceController
 from local_clip_ai.app.results_controller import CandidateListModel, ResultsController
+from local_clip_ai.app.tool_controller import ToolController
 from local_clip_ai.app.tray_controller import TrayController
 from local_clip_ai.app.twitch_controller import TwitchController
 from local_clip_ai.paths import AppPaths
@@ -57,6 +58,7 @@ class QmlSmokeTests(unittest.TestCase):
         tray = TrayController(queue.startQueue)
         profiles = ProfilesController(JobDatabase(self.paths.database))
         twitch = TwitchController(JobDatabase(self.paths.database))
+        tools = ToolController(self.paths)
         engine = QQmlApplicationEngine()
         engine.rootContext().setContextProperty("diagnosticsController", diagnostics)
         engine.rootContext().setContextProperty("diagnosticsModel", diagnostics_model)
@@ -68,6 +70,7 @@ class QmlSmokeTests(unittest.TestCase):
         engine.rootContext().setContextProperty("trayController", tray)
         engine.rootContext().setContextProperty("profilesController", profiles)
         engine.rootContext().setContextProperty("twitchController", twitch)
+        engine.rootContext().setContextProperty("toolController", tools)
         qml_path = (
             Path(__file__).parents[1]
             / "src"

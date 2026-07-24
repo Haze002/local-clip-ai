@@ -1,0 +1,84 @@
+from pathlib import Path
+
+from PyInstaller.utils.hooks import collect_all
+
+
+repository_root = Path(SPEC).resolve().parent.parent
+source_root = repository_root / "src"
+datas = [
+    (
+        str(source_root / "local_clip_ai" / "app" / "qml" / "Main.qml"),
+        "local_clip_ai/app/qml",
+    ),
+    (str(repository_root / "README.md"), "."),
+    (str(repository_root / "docs" / "WINDOWS_BETA.md"), "docs"),
+]
+binaries = []
+hidden_imports = [
+    "keyring.backends.Windows",
+    "local_clip_ai.cli",
+    "nvidia.cublas",
+    "nvidia.cuda_nvrtc",
+    "nvidia.cudnn",
+]
+
+for package_name in (
+    "ctranslate2",
+    "fastembed",
+    "faster_whisper",
+    "keyring",
+    "nvidia.cublas",
+    "nvidia.cuda_nvrtc",
+    "nvidia.cudnn",
+    "onnxruntime",
+    "tokenizers",
+):
+    package_datas, package_binaries, package_hidden_imports = collect_all(package_name)
+    datas += package_datas
+    binaries += package_binaries
+    hidden_imports += package_hidden_imports
+
+analysis = Analysis(
+    [str(repository_root / "packaging" / "windows_entry.py")],
+    pathex=[str(source_root)],
+    binaries=binaries,
+    datas=datas,
+    hiddenimports=hidden_imports,
+    hookspath=[],
+    hooksconfig={},
+    runtime_hooks=[],
+    excludes=[
+        "matplotlib",
+        "pandas",
+        "scipy",
+        "tkinter",
+        "torch",
+    ],
+    noarchive=False,
+    optimize=1,
+)
+pyz = PYZ(analysis.pure)
+
+executable = EXE(
+    pyz,
+    analysis.scripts,
+    [],
+    exclude_binaries=True,
+    name="LocalClipAI",
+    debug=False,
+    bootloader_ignore_signals=False,
+    strip=False,
+    upx=False,
+    console=False,
+    disable_windowed_traceback=False,
+)
+
+collection = COLLECT(
+    executable,
+    analysis.binaries,
+    analysis.datas,
+    strip=False,
+    upx=False,
+    upx_exclude=[],
+    name="LocalClipAI",
+)

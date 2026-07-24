@@ -38,6 +38,9 @@ gpu = [
     "nvidia-cublas-cu12>=12.8,<13; platform_system == 'Windows'",
     "nvidia-cudnn-cu12>=9.8,<10; platform_system == 'Windows'",
 ]
+packaging = [
+    "pyinstaller>=6.21,<7",
+]
 
 [project.scripts]
 local-clip-ai = "local_clip_ai.cli:main"

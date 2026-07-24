@@ -49,6 +49,20 @@ The convenience scripts perform the same steps:
 .\scripts\run.ps1
 ```
 
+## Windows beta package
+
+Build the self-contained one-folder Windows beta and ZIP archive:
+
+```powershell
+.\scripts\build_windows_beta.ps1
+```
+
+The packaged app does not require a separate Python installation. On first
+launch, use **Settings → Install / repair** to provision verified portable media
+tools inside the app's local runtime directory. See
+[docs/WINDOWS_BETA.md](docs/WINDOWS_BETA.md) for installation, privacy, recovery,
+and Twitch connection details.
+
 ## Required external software
 
 - Windows 11

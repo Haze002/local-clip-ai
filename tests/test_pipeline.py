@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import shutil
+import sys
 import unittest
 import uuid
 from pathlib import Path
@@ -50,8 +51,10 @@ class PipelineRunnerTests(unittest.TestCase):
             height=720,
             sample_rate=48000,
         )
+        worker_commands: list[list[str]] = []
 
         def fake_worker(command: list[str], **_: object) -> tuple[int, list[str]]:
+            worker_commands.append(command)
             output = Path(command[command.index("--output") + 1])
             output.parent.mkdir(parents=True, exist_ok=True)
             output.write_text(
@@ -86,6 +89,7 @@ class PipelineRunnerTests(unittest.TestCase):
                 "local_clip_ai.pipeline.runner.extract_semantic_evidence",
                 return_value=[],
             ),
+            patch.object(sys, "frozen", True, create=True),
         ):
             PipelineRunner(self.paths, self.database).run_job(job_id)
 
@@ -97,6 +101,7 @@ class PipelineRunnerTests(unittest.TestCase):
             "completed",
         )
         self.assertGreaterEqual(len(self.database.list_candidates(job_id)), 1)
+        self.assertEqual(worker_commands[0][1], "--worker-cli")
 
     def test_preexisting_cancel_request_preserves_unstarted_stages(self) -> None:
         job_id = self._job()

@@ -220,10 +220,13 @@ class PipelineRunner:
             chunk_path = chunk_directory / f"chunk_{chunk.index:04d}.json"
             document = self._read_valid_transcript_document(chunk_path)
             if document is None:
+                worker_prefix = (
+                    [sys.executable, "--worker-cli"]
+                    if getattr(sys, "frozen", False)
+                    else [sys.executable, "-m", "local_clip_ai"]
+                )
                 command = [
-                    sys.executable,
-                    "-m",
-                    "local_clip_ai",
+                    *worker_prefix,
                     "--data-dir",
                     str(self.paths.root),
                     "transcribe",

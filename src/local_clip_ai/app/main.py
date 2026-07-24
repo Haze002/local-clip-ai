@@ -18,6 +18,7 @@ from local_clip_ai.app.profiles_controller import ProfilesController
 from local_clip_ai.app.queue_controller import JobListModel, QueueController
 from local_clip_ai.app.resource_controller import ResourceController
 from local_clip_ai.app.results_controller import CandidateListModel, ResultsController
+from local_clip_ai.app.tool_controller import ToolController
 from local_clip_ai.app.tray_controller import TrayController
 from local_clip_ai.app.twitch_controller import TwitchController
 from local_clip_ai.paths import AppPaths
@@ -52,6 +53,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     resource_controller = ResourceController(database)
     profiles_controller = ProfilesController(database)
     twitch_controller = TwitchController(database)
+    tool_controller = ToolController(paths)
+    tool_controller.installFinished.connect(
+        lambda _message, _failed: diagnostics_controller.refresh()
+    )
     resource_controller.resumeRequested.connect(queue_controller.startQueue)
     tray_controller = TrayController(queue_controller.startQueue)
     if tray_controller.available:
@@ -83,6 +88,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     engine.rootContext().setContextProperty("resourceController", resource_controller)
     engine.rootContext().setContextProperty("profilesController", profiles_controller)
     engine.rootContext().setContextProperty("twitchController", twitch_controller)
+    engine.rootContext().setContextProperty("toolController", tool_controller)
     engine.rootContext().setContextProperty("trayController", tray_controller)
 
     qml_path = Path(__file__).with_name("qml") / "Main.qml"

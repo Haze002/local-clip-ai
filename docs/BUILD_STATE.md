@@ -131,12 +131,31 @@ Update it whenever a milestone is completed or a material blocker changes.
   unavailable on the current Ryzen/Windows configuration rather than displaying a false
   ACPI value. GPU thermal protection is fully active.
 
+### Milestone 6 - Windows beta packaging
+
+- Added a first-launch Settings action that downloads and verifies portable FFmpeg,
+  ffprobe, and yt-dlp without a system-wide installation.
+- Added a PyInstaller 6.21 one-folder build with Qt/QML/Multimedia, faster-whisper,
+  CTranslate2, FastEmbed/ONNX, Windows Credential Manager support, and local NVIDIA
+  CUDA/cuDNN runtime DLLs.
+- Frozen queue processes use a dedicated `--worker-cli` entry path, preserving isolated
+  transcription workers instead of accidentally launching another GUI.
+- Built and tested the packaged executable:
+  - strict packaged diagnostics exited successfully;
+  - real 10-second packaged transcription ran on RTX 5070 CUDA `int8_float16`;
+  - packaged parent → packaged child queue execution completed every Quick stage;
+  - packaged GUI process launched and remained healthy.
+- The validated unpacked beta is 2.56 GiB. The ZIP is 1.52 GiB with SHA-256:
+  `005ee5e689a951977f9f20a50151e51f4d9465b92f627e01950bf280468296ab`.
+- Added `docs/WINDOWS_BETA.md` with install, first-run, Twitch, privacy, recovery, and
+  build instructions. Build output remains ignored and is not committed to Git.
+
 ## Remaining milestones
 
 1. Live Twitch device connection test after a public Client ID is entered.
 2. Full calibration against all six supplied moments and long-duration thermal/GPU tests.
 3. Optional reliable CPU sensor provider where Windows exposes no package sensor.
-4. Windows packaging, beta installation docs, final green checkpoints, and PR completion.
+4. Final green checkpoint, ZIP rebuild if calibration changes code, and PR completion.
 
 ## Calibration contract
 

@@ -1274,7 +1274,7 @@ ApplicationWindow {
 
                 Rectangle {
                     Layout.fillWidth: true
-                    Layout.preferredHeight: 330
+                    Layout.preferredHeight: 450
                     radius: 12
                     color: "#141a24"
                     border.width: 1
@@ -1371,6 +1371,39 @@ ApplicationWindow {
                             color: "#657188"
                             font.pixelSize: 11
                             wrapMode: Text.WordWrap
+                        }
+                        Rectangle {
+                            Layout.fillWidth: true
+                            Layout.preferredHeight: 1
+                            color: "#263247"
+                        }
+                        RowLayout {
+                            Layout.fillWidth: true
+                            ColumnLayout {
+                                Layout.fillWidth: true
+                                Label {
+                                    text: "PORTABLE MEDIA TOOLS"
+                                    color: "#697589"
+                                    font.pixelSize: 10
+                                    font.weight: Font.Bold
+                                }
+                                Label {
+                                    Layout.fillWidth: true
+                                    text: toolController.status
+                                    color: toolController.status.indexOf("failed") >= 0
+                                           ? "#ff9aa6" : "#9aa5b6"
+                                    wrapMode: Text.WordWrap
+                                }
+                            }
+                            BusyIndicator {
+                                visible: toolController.busy
+                                running: visible
+                            }
+                            Button {
+                                text: toolController.busy ? "Installing..." : "Install / repair"
+                                enabled: !toolController.busy
+                                onClicked: toolController.installTools()
+                            }
                         }
                     }
                 }
