@@ -51,6 +51,12 @@ def run_cancellable_process(
     on_output: ProgressCallback | None = None,
     poll_interval: float = 0.2,
 ) -> tuple[int, list[str]]:
+    environment = os.environ.copy()
+    # Windows otherwise gives Python workers the active legacy console code page.
+    # Transcript text is arbitrary Unicode, so one unrepresentable character could
+    # abort an otherwise healthy multi-hour transcription before its checkpoint.
+    environment["PYTHONIOENCODING"] = "utf-8"
+    environment["PYTHONUTF8"] = "1"
     process = subprocess.Popen(
         command,
         stdout=subprocess.PIPE,
@@ -58,6 +64,7 @@ def run_cancellable_process(
         text=True,
         encoding="utf-8",
         errors="replace",
+        env=environment,
         creationflags=_creation_flags(),
     )
     output_queue: queue.Queue[str | None] = queue.Queue()

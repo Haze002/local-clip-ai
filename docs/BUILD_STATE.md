@@ -130,6 +130,11 @@ Update it whenever a milestone is completed or a material blocker changes.
 - CPU package temperature is shown when the operating system exposes it; it is marked
   unavailable on the current Ryzen/Windows configuration rather than displaying a false
   ACPI value. GPU thermal protection is fully active.
+- Added an end-to-end thermal policy regression test that proves sustained heat requests
+  a safe pause and that a stable cooldown resumes the preserved job.
+- Python subprocesses now force UTF-8 output. A real full-VOD run exposed a Windows
+  legacy-code-page failure on accented transcript text; the failed chunk resumed
+  successfully after the fix without repeating the first five durable chunks.
 
 ### Milestone 6 - Windows beta packaging
 
@@ -149,6 +154,16 @@ Update it whenever a milestone is completed or a material blocker changes.
   `005ee5e689a951977f9f20a50151e51f4d9465b92f627e01950bf280468296ab`.
 - Added `docs/WINDOWS_BETA.md` with install, first-run, Twitch, privacy, recovery, and
   build instructions. Build output remains ignored and is not committed to Git.
+
+### Calibration tooling
+
+- Added a machine-readable evaluator for the six user-labeled Twitch moments. It reports
+  recall, score rank, overlap, output duration, and source-span count from the local
+  database without committing media or analysis output.
+- The 150-second calibration moment is required to fit within 60 seconds and contain
+  multiple chronological source spans.
+- The full suite currently passes: 54 tests plus 2 parameterized subtests, with Ruff
+  clean. The two full-VOD Deep runs remain local and resumable while calibration proceeds.
 
 ## Remaining milestones
 
