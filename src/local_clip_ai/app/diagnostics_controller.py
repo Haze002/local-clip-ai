@@ -5,11 +5,11 @@ import threading
 from typing import Any
 
 from PySide6.QtCore import (
+    Property,
     QAbstractListModel,
     QByteArray,
     QModelIndex,
     QObject,
-    Property,
     Qt,
     Signal,
     Slot,
@@ -18,6 +18,8 @@ from PySide6.QtCore import (
 from local_clip_ai.diagnostics import collect_diagnostics
 from local_clip_ai.diagnostics.models import DiagnosticCheck, DiagnosticReport
 from local_clip_ai.paths import AppPaths
+
+INVALID_MODEL_INDEX = QModelIndex()
 
 
 class DiagnosticsListModel(QAbstractListModel):
@@ -38,7 +40,7 @@ class DiagnosticsListModel(QAbstractListModel):
             self.DetailsRole: QByteArray(b"checkDetails"),
         }
 
-    def rowCount(self, parent: QModelIndex = QModelIndex()) -> int:
+    def rowCount(self, parent: QModelIndex = INVALID_MODEL_INDEX) -> int:
         return 0 if parent.isValid() else len(self._checks)
 
     def data(self, index: QModelIndex, role: int = Qt.ItemDataRole.DisplayRole) -> Any:
@@ -119,4 +121,3 @@ class DiagnosticsController(QObject):
         self._running = False
         self.statusChanged.emit()
         self.runningChanged.emit()
-
