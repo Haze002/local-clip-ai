@@ -1,13 +1,21 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 import sys
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
-from local_clip_ai.analysis import TranscriptSegment, discover_candidates
+from local_clip_ai.analysis import (
+    EvidenceWindow,
+    TranscriptSegment,
+    discover_candidates,
+    extract_audio_evidence,
+    merge_transcript_documents,
+    plan_transcription_chunks,
+)
 from local_clip_ai.config import ContentProfile
 from local_clip_ai.media import probe_media
 from local_clip_ai.paths import AppPaths
@@ -29,7 +37,8 @@ class PipelineRunner:
         "source": 0.05,
         "acquisition": 0.35,
         "transcription": 0.82,
-        "candidates": 0.97,
+        "signals": 0.91,
+        "candidates": 0.98,
     }
 
     def __init__(
@@ -70,8 +79,15 @@ class PipelineRunner:
             )
             self._emit("Job paused; completed stages were preserved.")
 
-    def _completed_artifact(self, job_id: str, stage_name: str) -> Path | None:
+    def _completed_artifact(
+        self,
+        job_id: str,
+        stage_name: str,
+        artifact_kind: str,
+    ) -> Path | None:
         for artifact in reversed(self.database.list_artifacts(job_id, stage_name=stage_name)):
+            if artifact["artifact_kind"] != artifact_kind:
+                continue
             path = Path(artifact["local_path"])
             if artifact["complete"] and path.is_file():
                 return path
@@ -120,7 +136,7 @@ class PipelineRunner:
 
     def _acquire_media(self, job: dict[str, Any]) -> Path:
         job_id = str(job["id"])
-        existing = self._completed_artifact(job_id, "acquisition")
+        existing = self._completed_artifact(job_id, "acquisition", "analysis_media")
         if existing:
             return existing
         self._update_stage(job_id, "acquisition", 0.06)
@@ -171,28 +187,21 @@ class PipelineRunner:
 
     def _transcribe(self, job: dict[str, Any], media_path: Path) -> Path:
         job_id = str(job["id"])
-        existing = self._completed_artifact(job_id, "transcription")
+        existing = self._completed_artifact(
+            job_id,
+            "transcription",
+            "transcript_json",
+        )
         if existing:
             return existing
         self._update_stage(job_id, "transcription", 0.37)
         transcript_path = self.paths.transcripts / f"{job_id}.json"
+        chunk_directory = self.paths.transcripts / job_id
+        chunk_directory.mkdir(parents=True, exist_ok=True)
         content = json.loads(str(job["content_profile_json"]))
         language = str(content.get("language") or "auto")
-        command = [
-            sys.executable,
-            "-m",
-            "local_clip_ai",
-            "--data-dir",
-            str(self.paths.root),
-            "transcribe",
-            str(media_path),
-            "--mode",
-            str(job["analysis_mode"]),
-            "--language",
-            language,
-            "--output",
-            str(transcript_path),
-        ]
+        media_duration = probe_media(self.paths, media_path).duration_seconds
+        chunks = plan_transcription_chunks(media_duration)
         log_path = self.paths.logs / f"{job_id}.log"
         log_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -200,16 +209,82 @@ class PipelineRunner:
             with log_path.open("a", encoding="utf-8") as log:
                 log.write(line + "\n")
 
-        return_code, lines = run_cancellable_process(
-            command,
-            cancel_requested=lambda: self._stop_requested(job_id),
-            on_output=log_output,
-        )
-        if return_code or not transcript_path.is_file():
-            recent_output = "\n".join(lines[-30:])
-            raise RuntimeError(
-                f"Transcription worker exited with code {return_code}:\n{recent_output}"
+        documents: list[dict[str, Any]] = []
+        completed_chunks: list[int] = []
+        for chunk in chunks:
+            if self._stop_requested(job_id):
+                raise AcquisitionCancelled("Transcription stopped between chunks")
+            chunk_path = chunk_directory / f"chunk_{chunk.index:04d}.json"
+            document = self._read_valid_transcript_document(chunk_path)
+            if document is None:
+                command = [
+                    sys.executable,
+                    "-m",
+                    "local_clip_ai",
+                    "--data-dir",
+                    str(self.paths.root),
+                    "transcribe",
+                    str(media_path),
+                    "--mode",
+                    str(job["analysis_mode"]),
+                    "--language",
+                    language,
+                    "--clip-start",
+                    str(chunk.start_seconds),
+                    "--clip-end",
+                    str(chunk.end_seconds),
+                    "--output",
+                    str(chunk_path),
+                ]
+                return_code, lines = run_cancellable_process(
+                    command,
+                    cancel_requested=lambda: self._stop_requested(job_id),
+                    on_output=log_output,
+                )
+                document = self._read_valid_transcript_document(chunk_path)
+                if return_code or document is None:
+                    recent_output = "\n".join(lines[-30:])
+                    raise RuntimeError(
+                        "Transcription chunk "
+                        f"{chunk.index + 1}/{len(chunks)} exited with code "
+                        f"{return_code}:\n{recent_output}"
+                    )
+            documents.append(document)
+            completed_chunks.append(chunk.index)
+            self.database.save_artifact(
+                job_id,
+                "transcription",
+                "transcript_chunk",
+                chunk_path,
+                complete=True,
+                size_bytes=chunk_path.stat().st_size,
+                metadata={
+                    "index": chunk.index,
+                    "start_seconds": chunk.start_seconds,
+                    "end_seconds": chunk.end_seconds,
+                },
             )
+            self.database.save_stage_checkpoint(
+                job_id,
+                "transcription",
+                {
+                    "completed_chunks": completed_chunks,
+                    "total_chunks": len(chunks),
+                    "chunk_seconds": 900,
+                    "overlap_seconds": 5,
+                },
+                status="running",
+            )
+            fraction = len(completed_chunks) / len(chunks)
+            self._update_stage(job_id, "transcription", 0.37 + fraction * 0.43)
+
+        merged = merge_transcript_documents(documents)
+        temporary_path = transcript_path.with_suffix(".json.tmp")
+        temporary_path.write_text(
+            json.dumps(merged, ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        os.replace(temporary_path, transcript_path)
         size = transcript_path.stat().st_size
         self.database.save_artifact(
             job_id,
@@ -227,6 +302,18 @@ class PipelineRunner:
         )
         self._update_stage(job_id, "transcription")
         return transcript_path
+
+    @staticmethod
+    def _read_valid_transcript_document(path: Path) -> dict[str, Any] | None:
+        if not path.is_file():
+            return None
+        try:
+            values = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            return None
+        if not isinstance(values, dict) or not isinstance(values.get("segments"), list):
+            return None
+        return values
 
     @staticmethod
     def _read_segments(transcript_path: Path) -> list[TranscriptSegment]:
@@ -250,7 +337,13 @@ class PipelineRunner:
         self._update_stage(job_id, "candidates", 0.84)
         content_values = json.loads(str(job["content_profile_json"]))
         profile = ContentProfile(**content_values)
-        moments = discover_candidates(self._read_segments(transcript_path), profile)
+        signals_path = self._completed_artifact(job_id, "signals", "audio_evidence")
+        audio_evidence = self._read_audio_evidence(signals_path) if signals_path else []
+        moments = discover_candidates(
+            self._read_segments(transcript_path),
+            profile,
+            audio_evidence=audio_evidence,
+        )
         self.database.clear_candidates(job_id)
         for moment in moments:
             self.database.save_candidate(
@@ -286,6 +379,65 @@ class PipelineRunner:
         self._update_stage(job_id, "candidates")
         return len(moments)
 
+    def _analyze_audio(self, job: dict[str, Any], media_path: Path) -> Path:
+        job_id = str(job["id"])
+        existing = self._completed_artifact(job_id, "signals", "audio_evidence")
+        if existing:
+            return existing
+        self._update_stage(job_id, "signals", 0.84)
+        evidence = extract_audio_evidence(
+            self.paths,
+            media_path,
+            cancel_requested=lambda: self._stop_requested(job_id),
+        )
+        output = self.paths.artifacts / job_id / "audio_evidence.json"
+        output.parent.mkdir(parents=True, exist_ok=True)
+        values = [
+            {
+                "start_seconds": item.start_seconds,
+                "end_seconds": item.end_seconds,
+                "score": item.score,
+                "rationale": item.rationale,
+            }
+            for item in evidence
+        ]
+        temporary = output.with_suffix(".json.tmp")
+        temporary.write_text(
+            json.dumps(values, ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        os.replace(temporary, output)
+        self.database.save_artifact(
+            job_id,
+            "signals",
+            "audio_evidence",
+            output,
+            complete=True,
+            size_bytes=output.stat().st_size,
+            metadata={"window_count": len(evidence), "window_seconds": 1},
+        )
+        self.database.save_stage_checkpoint(
+            job_id,
+            "signals",
+            {"path": str(output), "window_count": len(evidence)},
+            status="completed",
+        )
+        self._update_stage(job_id, "signals")
+        return output
+
+    @staticmethod
+    def _read_audio_evidence(path: Path) -> list[EvidenceWindow]:
+        values = json.loads(path.read_text(encoding="utf-8"))
+        return [
+            EvidenceWindow(
+                start_seconds=float(item["start_seconds"]),
+                end_seconds=float(item["end_seconds"]),
+                score=float(item["score"]),
+                rationale=str(item.get("rationale") or "audio energy"),
+            )
+            for item in values
+        ]
+
     def run_job(self, job_id: str) -> None:
         job = self._job(job_id)
         if job["status"] not in {"queued", "interrupted"}:
@@ -306,6 +458,11 @@ class PipelineRunner:
                 return
             self._emit("Transcribing in an isolated local AI worker")
             transcript_path = self._transcribe(job, media_path)
+            if self._stop_requested(job_id):
+                self._handle_stop(job_id)
+                return
+            self._emit("Measuring audio energy and reaction peaks")
+            self._analyze_audio(job, media_path)
             if self._stop_requested(job_id):
                 self._handle_stop(job_id)
                 return

@@ -7,6 +7,7 @@ import uuid
 from pathlib import Path
 from unittest.mock import patch
 
+from local_clip_ai.analysis import EvidenceWindow
 from local_clip_ai.config import default_analysis_profile, default_content_profile
 from local_clip_ai.media.probe import MediaProbe
 from local_clip_ai.paths import AppPaths
@@ -76,6 +77,10 @@ class PipelineRunnerTests(unittest.TestCase):
             patch(
                 "local_clip_ai.pipeline.runner.run_cancellable_process",
                 side_effect=fake_worker,
+            ),
+            patch(
+                "local_clip_ai.pipeline.runner.extract_audio_evidence",
+                return_value=[EvidenceWindow(40, 41, 0.9, "audio peak")],
             ),
         ):
             PipelineRunner(self.paths, self.database).run_job(job_id)

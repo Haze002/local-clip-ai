@@ -69,6 +69,18 @@ ApplicationWindow {
         }
     }
 
+    Connections {
+        target: twitchController
+        function onLatestVodReady(url, title) {
+            queueController.queueSource(
+                url,
+                modeSelector.currentText.toLowerCase(),
+                window.reuseValue(reuseSelector.currentIndex)
+            )
+            window.currentPage = 0
+        }
+    }
+
     DropArea {
         anchors.fill: parent
         onDropped: function(drop) {
@@ -271,6 +283,11 @@ ApplicationWindow {
                                     )
                                     sourceField.clear()
                                 }
+                            }
+                            Button {
+                                text: twitchController.busy ? "Finding..." : "Add latest VOD"
+                                enabled: !twitchController.busy
+                                onClicked: twitchController.findLatestVod()
                             }
                         }
 
@@ -1081,12 +1098,126 @@ ApplicationWindow {
 
         Item {
             ColumnLayout {
-                anchors.centerIn: parent
-                Label { text: "Settings"; color: "#f4f7fb"; font.pixelSize: 28 }
-                Label {
-                    text: "Runtime directory: " + diagnosticsController.dataRoot
-                    color: "#8792a5"
+                anchors.fill: parent
+                anchors.margins: 30
+                spacing: 18
+
+                ColumnLayout {
+                    Label {
+                        text: "Settings"
+                        color: "#f4f7fb"
+                        font.pixelSize: 27
+                        font.weight: Font.DemiBold
+                    }
+                    Label {
+                        text: "Runtime directory: " + diagnosticsController.dataRoot
+                        color: "#8792a5"
+                    }
                 }
+
+                Rectangle {
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: 330
+                    radius: 12
+                    color: "#141a24"
+                    border.width: 1
+                    border.color: "#202939"
+
+                    ColumnLayout {
+                        anchors.fill: parent
+                        anchors.margins: 18
+                        spacing: 12
+
+                        Label {
+                            text: "TWITCH LATEST-VOD AUTOMATION"
+                            color: "#697589"
+                            font.pixelSize: 10
+                            font.weight: Font.Bold
+                        }
+                        Label {
+                            Layout.fillWidth: true
+                            wrapMode: Text.WordWrap
+                            text: "Create a Twitch developer application with Public client type, "
+                                  + "then paste its Client ID. Device-code sign-in never uses or "
+                                  + "stores a client secret."
+                            color: "#9aa5b6"
+                        }
+                        RowLayout {
+                            Layout.fillWidth: true
+                            TextField {
+                                id: twitchClientId
+                                Layout.fillWidth: true
+                                placeholderText: "Public Twitch application Client ID"
+                                text: twitchController.clientId
+                                echoMode: TextInput.Normal
+                            }
+                            TextField {
+                                id: twitchChannelLogin
+                                Layout.preferredWidth: 220
+                                placeholderText: "Channel login (blank = me)"
+                                text: twitchController.channelLogin
+                            }
+                            Button {
+                                text: "Save"
+                                onClicked: twitchController.saveConfiguration(
+                                    twitchClientId.text,
+                                    twitchChannelLogin.text
+                                )
+                            }
+                            Button {
+                                text: "Developer console"
+                                onClicked: twitchController.openDeveloperConsole()
+                            }
+                        }
+                        RowLayout {
+                            Button {
+                                text: twitchController.busy ? "Waiting..." : "Connect Twitch"
+                                enabled: !twitchController.busy
+                                onClicked: twitchController.connectTwitch()
+                            }
+                            Button {
+                                text: "Open activation"
+                                enabled: twitchController.verificationUri.length > 0
+                                onClicked: twitchController.openActivation()
+                            }
+                            Button {
+                                text: "Cancel"
+                                enabled: twitchController.busy
+                                onClicked: twitchController.cancelConnection()
+                            }
+                            Button {
+                                text: "Disconnect"
+                                enabled: twitchController.clientId.length > 0
+                                onClicked: twitchController.disconnect()
+                            }
+                            Item { Layout.fillWidth: true }
+                            Label {
+                                visible: twitchController.userCode.length > 0
+                                text: "CODE  " + twitchController.userCode
+                                color: "#76afff"
+                                font.pixelSize: 18
+                                font.weight: Font.Bold
+                            }
+                        }
+                        Label {
+                            Layout.fillWidth: true
+                            text: twitchController.status
+                            color: twitchController.status.indexOf("failed") >= 0
+                                   ? "#ff9aa6" : "#7de4a9"
+                            wrapMode: Text.WordWrap
+                        }
+                        Label {
+                            Layout.fillWidth: true
+                            text: "Tokens are stored only in Windows Credential Manager. "
+                                  + "The public Client ID and channel preference live in the "
+                                  + "local database; nothing is committed to Git."
+                            color: "#657188"
+                            font.pixelSize: 11
+                            wrapMode: Text.WordWrap
+                        }
+                    }
+                }
+                Item { Layout.fillHeight: true }
             }
         }
     }

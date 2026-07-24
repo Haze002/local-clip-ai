@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from local_clip_ai.config import AnalysisProfile
+from local_clip_ai.media.timecodes import TimeRange
 from local_clip_ai.paths import AppPaths
 
 CancelCheck = Callable[[], bool]
@@ -105,6 +106,7 @@ def transcribe_media(
     cancel_requested: CancelCheck | None = None,
     on_segment: SegmentCallback | None = None,
     device: str | None = None,
+    clip_range: TimeRange | None = None,
 ) -> Transcript:
     configure_nvidia_dll_directories()
     try:
@@ -137,6 +139,11 @@ def transcribe_media(
         vad_filter=True,
         word_timestamps=False,
         condition_on_previous_text=True,
+        clip_timestamps=(
+            [clip_range.start, clip_range.end]
+            if clip_range is not None
+            else "0"
+        ),
     )
     segments: list[TranscriptSegment] = []
     try:
@@ -166,6 +173,7 @@ def transcribe_media(
                 cancel_requested=cancel_requested,
                 on_segment=on_segment,
                 device="cpu",
+                clip_range=clip_range,
             )
         raise
     return Transcript(

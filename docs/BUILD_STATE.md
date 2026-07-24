@@ -6,7 +6,7 @@ Update it whenever a milestone is completed or a material blocker changes.
 ## Current checkpoint
 
 - Branch: `agent/end-to-end-build`
-- Phase: Milestones 1-2 complete; Milestones 3-5 partially implemented
+- Phase: Milestones 1-2 complete; Milestones 3-5 substantially implemented
 - Last updated: 2026-07-24
 - GitHub media/model state: clean by design; all runtime artifacts remain ignored
 
@@ -47,6 +47,12 @@ Update it whenever a milestone is completed or a material blocker changes.
 - Added the native queue UI with link paste, multi-file drag/drop, Quick/Balanced/Deep,
   none/content/analysis/both reuse, Start Queue, pause, resume, cancel, and progress.
 - Added restart recovery and completed-stage reuse.
+- Added an optional Twitch device-code connection using the official Helix API.
+  The public application Client ID and preferred channel are stored in local SQLite;
+  access/refresh tokens are stored only in Windows Credential Manager through keyring.
+- Added one-click latest archived VOD lookup and queueing from the native application.
+  A user-created public Twitch application Client ID is still required for the live
+  connection test.
 
 ## In progress
 
@@ -57,6 +63,14 @@ Update it whenever a milestone is completed or a material blocker changes.
 - Confirmed the RTX 5070 supports CUDA float16 and mixed int8/float16 inference.
 - Transcription runs in a disposable child process so its CUDA context is released when
   the stage completes or is cancelled.
+- Long media is transcribed in independently durable 15-minute chunks with five-second
+  boundary overlap. Valid chunks are reused after a crash or cancellation, overlap
+  duplicates are removed, and the combined transcript is written atomically.
+- Confirmed with the real Twitch calibration media that faster-whisper preserves
+  absolute source timestamps for internal clip ranges.
+- Added FFmpeg audio-energy and sudden-rise measurement in one-second windows. Audio
+  evidence is persisted as its own reusable artifact and now contributes to candidate
+  scoring, including reactions that speech-only analysis could miss.
 - Added transcript reaction/content scoring, up-to-three-minute event grouping,
   automatic preselection, and chronological multi-span condensation.
 - Added candidate review and source-quality FFmpeg/NVENC export.
@@ -65,6 +79,9 @@ Update it whenever a milestone is completed or a material blocker changes.
   - Quick GPU transcription into three timestamped segments;
   - one automatically preselected candidate from the real queue pipeline;
   - two separated five-second source spans exported as a validated 10.00-second MP4.
+- Re-ran the complete durable queue after chunking/audio integration: acquisition,
+  chunk transcription, atomic merge, audio analysis, and candidate selection all
+  completed with their expected local database checkpoints and artifacts.
 
 ### Milestone 4 - native workflow and preferences
 
@@ -89,10 +106,10 @@ Update it whenever a milestone is completed or a material blocker changes.
 
 ## Remaining milestones
 
-1. Twitch device-code connection and latest-VOD/channel discovery.
-2. Chunked long-VOD transcription checkpoints plus audio-energy/scene/activity signals.
-3. Balanced/Deep semantic and candidate-only vision reranking with VRAM fallback.
-4. Preview playback, richer explanations, export progress/cancellation, and queue reorder UI.
+1. Scene/activity signals plus meaningful Quick/Balanced/Deep differentiation.
+2. Balanced/Deep semantic and candidate-only vision reranking with VRAM fallback.
+3. Preview playback, richer explanations, export progress/cancellation, and queue reorder UI.
+4. Live Twitch device connection test after a public Client ID is entered.
 5. Full calibration against all six supplied moments and long-duration thermal/GPU tests.
 6. Optional reliable CPU sensor provider where Windows exposes no package sensor.
 7. Windows packaging, beta installation docs, final green checkpoints, and PR completion.

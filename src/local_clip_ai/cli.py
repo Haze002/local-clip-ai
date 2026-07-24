@@ -77,6 +77,8 @@ def _parser() -> argparse.ArgumentParser:
     transcribe.add_argument("--language", default="auto")
     transcribe.add_argument("--source-offset", type=float, default=0)
     transcribe.add_argument("--output", type=Path)
+    transcribe.add_argument("--clip-start", type=float)
+    transcribe.add_argument("--clip-end", type=float)
 
     export = subparsers.add_parser(
         "export-spans",
@@ -177,12 +179,18 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     if command == "transcribe":
         profile = default_analysis_profile(arguments.mode)
+        clip_range = None
+        if arguments.clip_start is not None or arguments.clip_end is not None:
+            if arguments.clip_start is None or arguments.clip_end is None:
+                parser.error("--clip-start and --clip-end must be provided together")
+            clip_range = TimeRange(arguments.clip_start, arguments.clip_end)
         transcript = transcribe_media(
             paths,
             arguments.media,
             profile,
             language=arguments.language,
             source_offset_seconds=arguments.source_offset,
+            clip_range=clip_range,
             on_segment=lambda segment: print(
                 f"[{segment.start_seconds:.2f}-{segment.end_seconds:.2f}] {segment.text}"
             ),
