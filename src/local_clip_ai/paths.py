@@ -12,10 +12,12 @@ class AppPaths:
     root: Path
     database: Path
     artifacts: Path
+    downloads: Path
     exports: Path
     logs: Path
     models: Path
     temporary: Path
+    tools: Path
 
     @classmethod
     def from_root(cls, root: Path | str) -> AppPaths:
@@ -24,10 +26,12 @@ class AppPaths:
             root=resolved_root,
             database=resolved_root / "jobs.sqlite3",
             artifacts=resolved_root / "artifacts",
+            downloads=resolved_root / "downloads",
             exports=resolved_root / "exports",
             logs=resolved_root / "logs",
             models=resolved_root / "models",
             temporary=resolved_root / "temp",
+            tools=resolved_root / "tools",
         )
 
     @classmethod
@@ -49,10 +53,11 @@ class AppPaths:
         for directory in (
             self.root,
             self.artifacts,
+            self.downloads,
             self.exports,
             self.logs,
             self.models,
             self.temporary,
+            self.tools,
         ):
             directory.mkdir(parents=True, exist_ok=True)
-

@@ -11,7 +11,6 @@ import tempfile
 from collections.abc import Callable
 from datetime import UTC, datetime
 from io import StringIO
-from pathlib import Path
 
 from local_clip_ai.diagnostics.models import (
     CheckStatus,
@@ -244,21 +243,22 @@ def _tool_version(executable: str) -> str:
         check=False,
         capture_output=True,
         text=True,
-        timeout=10,
+        timeout=30,
     )
     output = completed.stdout or completed.stderr
     return output.splitlines()[0].strip() if output else "Version unavailable"
 
 
-def _check_ffmpeg() -> DiagnosticCheck:
-    ffmpeg = shutil.which("ffmpeg")
-    ffprobe = shutil.which("ffprobe")
+def _check_ffmpeg(paths: AppPaths) -> DiagnosticCheck:
+    from local_clip_ai.tools import find_ffmpeg
+
+    ffmpeg, ffprobe = find_ffmpeg(paths)
     if not ffmpeg or not ffprobe:
         missing = [name for name, value in (("ffmpeg", ffmpeg), ("ffprobe", ffprobe)) if not value]
         return DiagnosticCheck(
             name="FFmpeg",
             status=CheckStatus.FAIL,
-            summary=f"Missing required executable(s): {', '.join(missing)}",
+            summary=f"Missing required executable(s): {', '.join(missing)}; run install-tools",
             details={"ffmpeg": ffmpeg, "ffprobe": ffprobe},
         )
 
@@ -267,8 +267,8 @@ def _check_ffmpeg() -> DiagnosticCheck:
         status=CheckStatus.PASS,
         summary=_tool_version(ffmpeg),
         details={
-            "ffmpeg": str(Path(ffmpeg).resolve()),
-            "ffprobe": str(Path(ffprobe).resolve()),
+            "ffmpeg": str(ffmpeg.resolve()),
+            "ffprobe": str(ffprobe.resolve()),
         },
     )
 
@@ -312,7 +312,7 @@ def collect_diagnostics(paths: AppPaths) -> DiagnosticReport:
         _safe_probe("Processor", _check_cpu),
         _safe_probe("System memory", _check_memory),
         _safe_probe("NVIDIA GPU", _check_nvidia_gpu),
-        _safe_probe("FFmpeg", _check_ffmpeg),
+        _safe_probe("FFmpeg", lambda: _check_ffmpeg(paths)),
         _safe_probe("SQLite", _check_sqlite),
         _safe_probe("Runtime storage", lambda: _check_storage(paths)),
     )
@@ -321,4 +321,3 @@ def collect_diagnostics(paths: AppPaths) -> DiagnosticReport:
         started_at=started_at,
         completed_at=datetime.now(UTC),
     )
-

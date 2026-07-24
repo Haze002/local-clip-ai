@@ -3,9 +3,10 @@
 Local Clip AI is a native Windows application for finding promising clips in long
 VODs without uploading the recordings to a third-party analysis service.
 
-The project is currently in **Milestone 0: hardware and platform validation**.
-The initial application checks the local Python environment, CPU, memory, NVIDIA
-GPU, FFmpeg installation, storage, and durable SQLite job database.
+The project is currently building toward its first Windows beta. The native
+application already checks the local Python environment, CPU, memory, NVIDIA GPU,
+portable FFmpeg installation, storage, and durable SQLite job database. Twitch
+VOD inspection and timestamp-range download primitives are under active development.
 
 This project is not affiliated with StreamLadder or ClipGPT.
 
@@ -52,13 +53,23 @@ The convenience scripts perform the same steps:
 - Windows 11
 - Python 3.12
 - A current NVIDIA display driver
-- FFmpeg and ffprobe (detected automatically; installation is not automated yet)
+- FFmpeg and ffprobe (a verified portable build is installed locally by the bootstrap)
 - CUDA 12 and cuDNN 9 when the transcription worker is enabled
 
 AI model files, VODs, transcripts, databases, exports, logs, and credentials are
 excluded from Git. Runtime data defaults to `%LOCALAPPDATA%\LocalClipAI`, and a
 different directory can be selected with `--data-dir` or
 `LOCAL_CLIP_AI_DATA_DIR`.
+
+Install or repair the verified portable media tools without changing Windows:
+
+```powershell
+.\.venv\Scripts\local-clip-ai.exe --data-dir .local-data install-tools
+```
+
+The installer obtains the latest compatible release metadata over HTTPS from the
+official BtbN/FFmpeg-Builds and yt-dlp GitHub repositories, validates each asset
+against the SHA-256 digest reported by GitHub, and records a local receipt.
 
 ## Repository map
 
@@ -74,4 +85,3 @@ docs/           Architecture and decisions
 
 See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the process boundaries and
 planned pipeline.
-

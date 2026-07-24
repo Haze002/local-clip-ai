@@ -9,7 +9,9 @@ from local_clip_ai import __version__
 from local_clip_ai.diagnostics import collect_diagnostics
 from local_clip_ai.diagnostics.models import CheckStatus, DiagnosticReport
 from local_clip_ai.paths import AppPaths
+from local_clip_ai.sources import inspect_twitch_vod
 from local_clip_ai.storage import JobDatabase
+from local_clip_ai.tools import install_portable_tools
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -34,6 +36,15 @@ def _parser() -> argparse.ArgumentParser:
     )
 
     subparsers.add_parser("init-db", help="Initialize the durable local job database.")
+
+    install_tools = subparsers.add_parser(
+        "install-tools",
+        help="Download verified portable FFmpeg and yt-dlp into the runtime directory.",
+    )
+    install_tools.add_argument("--force", action="store_true", help="Reinstall existing tools.")
+
+    vod_info = subparsers.add_parser("vod-info", help="Inspect a public Twitch VOD.")
+    vod_info.add_argument("url")
 
     add_job = subparsers.add_parser("add-job", help="Add a source VOD to the development queue.")
     add_job.add_argument("source")
@@ -75,6 +86,18 @@ def main(argv: Sequence[str] | None = None) -> int:
             _print_report(report)
         if getattr(arguments, "strict", False) and report.overall_status is CheckStatus.FAIL:
             return 1
+        return 0
+
+    if command == "install-tools":
+        for install in install_portable_tools(paths, force=arguments.force):
+            print(
+                f"Installed {install.name} ({install.release}, "
+                f"sha256:{install.sha256[:12]}...)"
+            )
+        return 0
+
+    if command == "vod-info":
+        print(json.dumps(inspect_twitch_vod(paths, arguments.url).to_dict(), indent=2))
         return 0
 
     database = JobDatabase(paths.database)
