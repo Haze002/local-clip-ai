@@ -4,22 +4,40 @@ import os
 import sys
 from collections.abc import Sequence
 from contextlib import ExitStack
+from typing import Any
 
 _NULL_STREAMS = ExitStack()
+
+
+def _utf8_stream(stream: Any) -> Any:
+    if stream is None:
+        return _NULL_STREAMS.enter_context(
+            open(  # noqa: SIM115
+                os.devnull,
+                "w",
+                encoding="utf-8",
+                errors="backslashreplace",
+            )
+        )
+    reconfigure = getattr(stream, "reconfigure", None)
+    if callable(reconfigure):
+        reconfigure(encoding="utf-8", errors="backslashreplace")
+    return stream
+
+
+def configure_utf8_standard_streams() -> None:
+    """Make arbitrary transcript text safe on Windows legacy-code-page systems."""
+    os.environ["PYTHONIOENCODING"] = "utf-8"
+    os.environ["PYTHONUTF8"] = "1"
+    sys.stdout = _utf8_stream(sys.stdout)
+    sys.stderr = _utf8_stream(sys.stderr)
 
 
 def main(argv: Sequence[str] | None = None) -> int:
     arguments = list(argv if argv is not None else sys.argv[1:])
     if "--worker-cli" in arguments:
         arguments.remove("--worker-cli")
-        if sys.stdout is None:
-            sys.stdout = _NULL_STREAMS.enter_context(
-                open(os.devnull, "w", encoding="utf-8")  # noqa: SIM115
-            )
-        if sys.stderr is None:
-            sys.stderr = _NULL_STREAMS.enter_context(
-                open(os.devnull, "w", encoding="utf-8")  # noqa: SIM115
-            )
+        configure_utf8_standard_streams()
         from local_clip_ai.cli import main as cli_main
 
         return cli_main(arguments)

@@ -190,6 +190,29 @@ Update it whenever a milestone is completed or a material blocker changes.
   inspected inside the ZIP. Strict packaged diagnostics against a clean runtime exited
   successfully.
 
+### Milestone 8 - Packaged worker Unicode hotfix
+
+- A real Balanced job on VOD `2823263031` exposed a remaining Windows locale boundary:
+  the packaged transcription worker received a redirected stream encoded as cp1253 and
+  crashed while printing Whisper text containing `U+4E0B`. Transcription itself and the
+  first durable 15-minute chunk were valid.
+- Version 0.1.2 reconfigures existing packaged worker stdout/stderr streams to UTF-8 with
+  `backslashreplace`, in addition to retaining the UTF-8 process environment. Source CLI
+  entry points apply the same configuration.
+- Added a regression test that starts with real cp1253 `TextIOWrapper` streams and prints
+  multilingual text including the exact failing character. The process-level test also
+  round-trips that text through a child worker.
+- The Windows build now runs a hidden packaged worker with redirected stdout, requires
+  the UTF-8 byte sequence for `日本語 下`, verifies an empty stderr stream and a zero exit
+  code, and refuses to archive if any of those checks fail.
+- The real packaged smoke output was inspected byte-for-byte and decoded to
+  `Local Clip AI Unicode smoke: naïve café — 日本語 下`.
+- The failed user job remains preserved at transcription chunk 2/8 with chunk 1 complete;
+  Resume under v0.1.2 reuses that completed chunk.
+- The v0.1.2 ZIP is 1.651 GiB (1,772,327,018 bytes), and its generated checksum matches
+  SHA-256:
+  `c414542bc6238de12b6b878027124eb47a9af7c9b5f73e0b0f12f21b91b63d5e`.
+
 ### Calibration tooling
 
 - Added a machine-readable evaluator for the six user-labeled Twitch moments. It reports
@@ -211,7 +234,7 @@ Update it whenever a milestone is completed or a material blocker changes.
   pause and stable-cooldown resume behavior.
 - Candidate-only rebuilding is available through `rebuild-candidates`, so preference and
   ranking changes reuse completed media, transcript, audio, visual, and semantic stages.
-- The full suite currently passes: 63 tests plus 2 parameterized subtests, with Ruff
+- The full suite currently passes: 64 tests plus 2 parameterized subtests, with Ruff
   clean. All calibration reports, media, transcripts, models, frames, databases, and
   exports remain ignored local data.
 

@@ -65,6 +65,8 @@ Twitch media/API requests and first-time tool/model downloads.
 - Interrupted running jobs recover after a Windows/app crash.
 - Configurable GPU/CPU temperature grace and cooldown limits.
 - CUDA allocation failures retry the affected transcription chunk on CPU.
+- Packaged transcription workers force UTF-8 output, so arbitrary multilingual
+  Whisper text cannot crash on a Windows legacy code page.
 - Long repetitive one/two-word music hallucinations are filtered before ranking.
 - Export and preview preparation are cancellable; incomplete export files are
   removed.

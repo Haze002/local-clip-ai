@@ -12,6 +12,8 @@ $applicationDirectory = Join-Path $repositoryRoot "dist\LocalClipAI"
 $archivePath = Join-Path $repositoryRoot "dist\LocalClipAI-Windows-Beta.zip"
 $checksumPath = "$archivePath.sha256"
 $packageSmokeRuntime = Join-Path $repositoryRoot "build\package-smoke-runtime"
+$unicodeSmokeOutput = Join-Path $repositoryRoot "build\package-unicode-smoke.stdout.txt"
+$unicodeSmokeError = Join-Path $repositoryRoot "build\package-unicode-smoke.stderr.txt"
 
 if (-not (Test-Path -LiteralPath $pythonExecutable)) {
     throw "The development environment is missing. Run .\scripts\bootstrap.ps1 first."
@@ -87,6 +89,29 @@ if (-not (Test-Path -LiteralPath $packageSmokeRuntime)) {
 }
 if (Get-ChildItem -LiteralPath $packageSmokeRuntime -Recurse -Filter "ffmpeg.exe") {
     throw "Clean-runtime validation unexpectedly installed FFmpeg outside the package."
+}
+
+foreach ($smokeFile in @($unicodeSmokeOutput, $unicodeSmokeError)) {
+    if (Test-Path -LiteralPath $smokeFile) {
+        Remove-Item -LiteralPath $smokeFile -Force
+    }
+}
+$unicodeProcess = Start-Process `
+    -FilePath (Join-Path $applicationDirectory "LocalClipAI.exe") `
+    -ArgumentList @("--worker-cli", "_unicode-smoke") `
+    -RedirectStandardOutput $unicodeSmokeOutput `
+    -RedirectStandardError $unicodeSmokeError `
+    -WindowStyle Hidden `
+    -Wait `
+    -PassThru
+if ($unicodeProcess.ExitCode -ne 0) {
+    throw "Packaged Unicode worker smoke test exited with code $($unicodeProcess.ExitCode)."
+}
+$unicodeBytes = [System.IO.File]::ReadAllBytes($unicodeSmokeOutput)
+$unicodeHex = ($unicodeBytes | ForEach-Object { $_.ToString("x2") }) -join ""
+$expectedUnicodeHex = "e697a5e69cace8aa9e20e4b88b"
+if (-not $unicodeHex.Contains($expectedUnicodeHex)) {
+    throw "Packaged Unicode worker smoke test did not preserve non-locale text."
 }
 
 if (-not $SkipArchive) {

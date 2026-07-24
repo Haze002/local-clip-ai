@@ -26,6 +26,8 @@ from local_clip_ai.sources import (
 from local_clip_ai.storage import JobDatabase
 from local_clip_ai.tools import install_portable_tools
 
+UNICODE_SMOKE_TEXT = "Local Clip AI Unicode smoke: naïve café — 日本語 下"
+
 
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
@@ -118,6 +120,7 @@ def _parser() -> argparse.ArgumentParser:
     rebuild_candidates.add_argument("job_id")
     rebuild_candidates.add_argument("--max-candidates", type=int)
     subparsers.add_parser("run-queue", help="Run all queued or interrupted jobs.")
+    subparsers.add_parser("_unicode-smoke", help=argparse.SUPPRESS)
     return parser
 
 
@@ -136,10 +139,17 @@ def _print_report(report: DiagnosticReport) -> None:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
+    from local_clip_ai.frozen_entry import configure_utf8_standard_streams
+
+    configure_utf8_standard_streams()
     parser = _parser()
     arguments = parser.parse_args(argv)
     command = arguments.command or "diagnose"
     paths = AppPaths.default(arguments.data_dir)
+
+    if command == "_unicode-smoke":
+        print(UNICODE_SMOKE_TEXT)
+        return 0
 
     if command == "diagnose":
         report = collect_diagnostics(paths)
