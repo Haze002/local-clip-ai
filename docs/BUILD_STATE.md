@@ -6,7 +6,7 @@ Update it whenever a milestone is completed or a material blocker changes.
 ## Current checkpoint
 
 - Branch: `agent/end-to-end-build`
-- Phase: Milestone 1 complete; Milestone 2 in progress
+- Phase: Milestones 1-2 complete; Milestones 3-5 partially implemented
 - Last updated: 2026-07-24
 - GitHub media/model state: clean by design; all runtime artifacts remain ignored
 
@@ -36,25 +36,66 @@ Update it whenever a milestone is completed or a material blocker changes.
 - Local runtime receipts, downloaded executables, media, and all future derived data
   live below `.local-data/` and are excluded from Git.
 
-## In progress
-
 ### Milestone 2 - durable queue and acquisition
 
-- Database migrations for sources, profiles, artifacts, candidates, and exports.
-- Resumable range acquisition and FFprobe-based validation.
-- Native queue/source workflow, multi-VOD queuing, link paste, and file drag/drop.
-- Latest-VOD/channel discovery with an optional Twitch device-code connection.
+- Added transactional migrations through schema 3 for sources, independently reusable
+  content/analysis profiles, artifacts, candidates, multi-span decisions, exports,
+  application settings, pause/cancel flags, progress, and recovery state.
+- Added resumable whole-VOD analysis acquisition and timestamp-range source acquisition.
+  Quick uses Twitch `Audio_Only`; Balanced/Deep retain a 360p analysis stream and fetch
+  source-quality video only for exports.
+- Added the native queue UI with link paste, multi-file drag/drop, Quick/Balanced/Deep,
+  none/content/analysis/both reuse, Start Queue, pause, resume, cancel, and progress.
+- Added restart recovery and completed-stage reuse.
+
+## In progress
+
+### Milestone 3 - local analysis and intelligent clips
+
+- Installed faster-whisper 1.2.1 and CTranslate2 4.8.1 with NVIDIA's official local
+  CUDA 12 cuBLAS and cuDNN 9 packages.
+- Confirmed the RTX 5070 supports CUDA float16 and mixed int8/float16 inference.
+- Transcription runs in a disposable child process so its CUDA context is released when
+  the stage completes or is cancelled.
+- Added transcript reaction/content scoring, up-to-three-minute event grouping,
+  automatic preselection, and chronological multi-span condensation.
+- Added candidate review and source-quality FFmpeg/NVENC export.
+- Real local validation completed on the supplied `00:14:50-00:15:20` moment:
+  - exact 30.021-second Twitch audio acquisition;
+  - Quick GPU transcription into three timestamped segments;
+  - one automatically preselected candidate from the real queue pipeline;
+  - two separated five-second source spans exported as a validated 10.00-second MP4.
+
+### Milestone 4 - native workflow and preferences
+
+- Added editable default content preference, language, duration, candidate count, and
+  automatic-preselection settings.
+- Results can be selected, rejected, or exported; all state remains in local SQLite.
+- Added Material dark styling, system tray behavior, and completion/export notifications.
+
+### Milestone 5 - resource and interruption safety
+
+- Added a show/hide compact monitor plus a full monitor page for total/app CPU, CPU clock
+  and cores, RAM, process I/O, GPU utilization/temperature/clocks/power, total VRAM, and
+  app-plus-worker VRAM.
+- Added persisted GPU/CPU temperature limits, sustained grace period, lower resume
+  temperature, cooldown stability, and VRAM soft limit.
+- Defaults implement the requested behavior: 90 °C pause limit, 120-second grace,
+  82 °C resume point, and 30-second stable cooldown.
+- Added Windows sleep inhibition only while the queue runner is active.
+- CPU package temperature is shown when the operating system exposes it; it is marked
+  unavailable on the current Ryzen/Windows configuration rather than displaying a false
+  ACPI value. GPU thermal protection is fully active.
 
 ## Remaining milestones
 
-1. Resumable audio extraction, local GPU transcription, and signal analysis.
-2. Quick, Balanced, and Deep candidate generation/ranking profiles.
-3. Long-moment condensation into chronological multi-span edit decisions.
-4. Review UI, previews, selection, and source-quality export.
-5. Live resource/temperature panel, configurable thermal policy, and VRAM fallback.
-6. Cancel/pause/resume, Windows crash recovery, sleep prevention, notifications, and tray.
-7. Calibration against the supplied moments, end-to-end GPU soak tests, Windows packaging,
-   beta documentation, green checkpoint pushes, and a draft pull request.
+1. Twitch device-code connection and latest-VOD/channel discovery.
+2. Chunked long-VOD transcription checkpoints plus audio-energy/scene/activity signals.
+3. Balanced/Deep semantic and candidate-only vision reranking with VRAM fallback.
+4. Preview playback, richer explanations, export progress/cancellation, and queue reorder UI.
+5. Full calibration against all six supplied moments and long-duration thermal/GPU tests.
+6. Optional reliable CPU sensor provider where Windows exposes no package sensor.
+7. Windows packaging, beta installation docs, final green checkpoints, and PR completion.
 
 ## Calibration contract
 
@@ -71,5 +112,7 @@ one end.
 2. Recreate the environment with `scripts/bootstrap.ps1` if `.venv` is missing.
 3. Run `local-clip-ai --data-dir .local-data install-tools`; existing verified tools
    are reused.
-4. Run Ruff and pytest before each push.
-5. Never add `.local-data`, VODs, models, transcripts, databases, or exports to Git.
+4. Install development/AI dependencies with
+   `pip install -e ".[dev,transcription,gpu]"`.
+5. Run Ruff and pytest before each push.
+6. Never add `.local-data`, VODs, models, transcripts, databases, or exports to Git.

@@ -18,6 +18,7 @@ class AppPaths:
     models: Path
     temporary: Path
     tools: Path
+    transcripts: Path
 
     @classmethod
     def from_root(cls, root: Path | str) -> AppPaths:
@@ -32,6 +33,7 @@ class AppPaths:
             models=resolved_root / "models",
             temporary=resolved_root / "temp",
             tools=resolved_root / "tools",
+            transcripts=resolved_root / "transcripts",
         )
 
     @classmethod
@@ -59,5 +61,6 @@ class AppPaths:
             self.models,
             self.temporary,
             self.tools,
+            self.transcripts,
         ):
             directory.mkdir(parents=True, exist_ok=True)

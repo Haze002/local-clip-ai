@@ -105,7 +105,14 @@ def yt_dlp_section_command(
     command = [
         str(executable),
         "--no-playlist",
-        "--no-part",
+        "--continue",
+        "--retries",
+        "10",
+        "--fragment-retries",
+        "10",
+        "--concurrent-fragments",
+        "4",
+        "--newline",
         "--download-sections",
         f"*{start_seconds:.3f}-{end_seconds:.3f}",
         "--force-keyframes-at-cuts",
@@ -113,6 +120,8 @@ def yt_dlp_section_command(
         str(ffmpeg.parent),
         "--output",
         str(output),
+        "--print",
+        "after_move:filepath",
     ]
     if audio_only:
         command.extend(["--format", "bestaudio/best", "--extract-audio", "--audio-format", "wav"])

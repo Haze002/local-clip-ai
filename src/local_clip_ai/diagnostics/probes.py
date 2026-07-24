@@ -273,6 +273,43 @@ def _check_ffmpeg(paths: AppPaths) -> DiagnosticCheck:
     )
 
 
+def _check_local_ai() -> DiagnosticCheck:
+    try:
+        from local_clip_ai.analysis.transcription import (
+            configure_nvidia_dll_directories,
+        )
+
+        dll_directories = configure_nvidia_dll_directories()
+        import ctranslate2
+        import faster_whisper
+    except ImportError as error:
+        return DiagnosticCheck(
+            name="Local AI runtime",
+            status=CheckStatus.FAIL,
+            summary=f"Missing transcription dependency: {error.name}",
+            details={"error": str(error)},
+        )
+    cuda_devices = ctranslate2.get_cuda_device_count()
+    return DiagnosticCheck(
+        name="Local AI runtime",
+        status=CheckStatus.PASS if cuda_devices else CheckStatus.WARN,
+        summary=(
+            f"faster-whisper {faster_whisper.__version__} / "
+            f"CTranslate2 {ctranslate2.__version__} / "
+            f"{cuda_devices} CUDA device(s)"
+        ),
+        details={
+            "cuda_device_count": cuda_devices,
+            "cuda_compute_types": (
+                sorted(ctranslate2.get_supported_compute_types("cuda"))
+                if cuda_devices
+                else []
+            ),
+            "nvidia_dll_directories": [str(path) for path in dll_directories],
+        },
+    )
+
+
 def _check_sqlite() -> DiagnosticCheck:
     parts = tuple(int(part) for part in sqlite3.sqlite_version.split("."))
     supported = parts >= (3, 35, 0)
@@ -312,6 +349,7 @@ def collect_diagnostics(paths: AppPaths) -> DiagnosticReport:
         _safe_probe("Processor", _check_cpu),
         _safe_probe("System memory", _check_memory),
         _safe_probe("NVIDIA GPU", _check_nvidia_gpu),
+        _safe_probe("Local AI runtime", _check_local_ai),
         _safe_probe("FFmpeg", lambda: _check_ffmpeg(paths)),
         _safe_probe("SQLite", _check_sqlite),
         _safe_probe("Runtime storage", lambda: _check_storage(paths)),

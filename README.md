@@ -6,7 +6,8 @@ VODs without uploading the recordings to a third-party analysis service.
 The project is currently building toward its first Windows beta. The native
 application already checks the local Python environment, CPU, memory, NVIDIA GPU,
 portable FFmpeg installation, storage, and durable SQLite job database. Twitch
-VOD inspection and timestamp-range download primitives are under active development.
+VOD inspection, resumable queue processing, CUDA transcription, candidate
+condensation, review/export, and resource safeguards are now present on the beta branch.
 
 This project is not affiliated with StreamLadder or ClipGPT.
 
@@ -26,7 +27,7 @@ to adopt new Python releases more slowly than ordinary application libraries.
 ```powershell
 py -3.12 -m venv .venv
 .\.venv\Scripts\python.exe -m pip install --upgrade pip
-.\.venv\Scripts\python.exe -m pip install -e ".[dev]"
+.\.venv\Scripts\python.exe -m pip install -e ".[dev,transcription,gpu]"
 ```
 
 Run the command-line diagnostics:
@@ -54,7 +55,7 @@ The convenience scripts perform the same steps:
 - Python 3.12
 - A current NVIDIA display driver
 - FFmpeg and ffprobe (a verified portable build is installed locally by the bootstrap)
-- CUDA 12 and cuDNN 9 when the transcription worker is enabled
+- About 2 GiB for repository-local NVIDIA runtime packages and the Quick model
 
 AI model files, VODs, transcripts, databases, exports, logs, and credentials are
 excluded from Git. Runtime data defaults to `%LOCALAPPDATA%\LocalClipAI`, and a
@@ -70,6 +71,18 @@ Install or repair the verified portable media tools without changing Windows:
 The installer obtains the latest compatible release metadata over HTTPS from the
 official BtbN/FFmpeg-Builds and yt-dlp GitHub repositories, validates each asset
 against the SHA-256 digest reported by GitHub, and records a local receipt.
+
+The development bootstrap installs NVIDIA's official CUDA 12 cuBLAS and cuDNN 9
+Python packages inside `.venv`; it does not install a system CUDA toolkit. Models are
+downloaded on first use below the selected runtime data directory.
+
+Run queued jobs from the CLI:
+
+```powershell
+.\.venv\Scripts\local-clip-ai.exe --data-dir .local-data add-job `
+  "https://www.twitch.tv/videos/2823263031" --mode quick
+.\.venv\Scripts\local-clip-ai.exe --data-dir .local-data run-queue
+```
 
 ## Repository map
 

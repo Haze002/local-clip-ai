@@ -23,7 +23,7 @@ if (-not $environmentIsReady) {
 }
 
 & $pythonExecutable -m pip install --upgrade pip
-& $pythonExecutable -m pip install -e ".[dev]"
+& $pythonExecutable -m pip install -e ".[dev,transcription,gpu]"
 & $pythonExecutable -m local_clip_ai --data-dir ".local-data" install-tools
 & $pythonExecutable -m local_clip_ai --data-dir ".local-data" diagnose
 
