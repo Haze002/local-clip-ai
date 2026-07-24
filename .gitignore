@@ -25,6 +25,7 @@ build/
 dist/
 *.egg-info/
 *.spec
+!packaging/*.spec
 
 # Local configuration and credentials
 .env
@@ -70,4 +71,3 @@ tmp/
 *.mp3
 *.aac
 *.m4a
-

@@ -238,27 +238,31 @@ def _check_nvidia_gpu() -> DiagnosticCheck:
     )
 
 
-def _tool_version(executable: str) -> str:
+def _tool_version(executable: str | Path, *arguments: str) -> str:
     completed = subprocess.run(
-        [executable, "-version"],
+        [executable, *(arguments or ("-version",))],
         check=False,
         capture_output=True,
         text=True,
-        timeout=10,
+        timeout=30,
     )
     output = completed.stdout or completed.stderr
     return output.splitlines()[0].strip() if output else "Version unavailable"
 
 
-def _check_ffmpeg() -> DiagnosticCheck:
-    ffmpeg = shutil.which("ffmpeg")
-    ffprobe = shutil.which("ffprobe")
+def _check_ffmpeg(paths: AppPaths) -> DiagnosticCheck:
+    from local_clip_ai.tools import find_ffmpeg
+
+    ffmpeg, ffprobe = find_ffmpeg(paths)
     if not ffmpeg or not ffprobe:
         missing = [name for name, value in (("ffmpeg", ffmpeg), ("ffprobe", ffprobe)) if not value]
         return DiagnosticCheck(
             name="FFmpeg",
             status=CheckStatus.FAIL,
-            summary=f"Missing required executable(s): {', '.join(missing)}",
+            summary=(
+                f"Missing required executable(s): {', '.join(missing)}; "
+                "open Settings and select Install / repair"
+            ),
             details={"ffmpeg": ffmpeg, "ffprobe": ffprobe},
         )
 
@@ -267,8 +271,64 @@ def _check_ffmpeg() -> DiagnosticCheck:
         status=CheckStatus.PASS,
         summary=_tool_version(ffmpeg),
         details={
-            "ffmpeg": str(Path(ffmpeg).resolve()),
-            "ffprobe": str(Path(ffprobe).resolve()),
+            "ffmpeg": str(ffmpeg.resolve()),
+            "ffprobe": str(ffprobe.resolve()),
+        },
+    )
+
+
+def _check_yt_dlp(paths: AppPaths) -> DiagnosticCheck:
+    from local_clip_ai.tools import find_yt_dlp
+
+    executable = find_yt_dlp(paths)
+    if executable is None:
+        return DiagnosticCheck(
+            name="Twitch downloader",
+            status=CheckStatus.FAIL,
+            summary="Missing required yt-dlp.exe; open Settings and select Install / repair",
+            details={"yt_dlp": None},
+        )
+    return DiagnosticCheck(
+        name="Twitch downloader",
+        status=CheckStatus.PASS,
+        summary=_tool_version(executable, "--version"),
+        details={"yt_dlp": str(executable.resolve())},
+    )
+
+
+def _check_local_ai() -> DiagnosticCheck:
+    try:
+        from local_clip_ai.analysis.transcription import (
+            configure_nvidia_dll_directories,
+        )
+
+        dll_directories = configure_nvidia_dll_directories()
+        import ctranslate2
+        import faster_whisper
+    except ImportError as error:
+        return DiagnosticCheck(
+            name="Local AI runtime",
+            status=CheckStatus.FAIL,
+            summary=f"Missing transcription dependency: {error.name}",
+            details={"error": str(error)},
+        )
+    cuda_devices = ctranslate2.get_cuda_device_count()
+    return DiagnosticCheck(
+        name="Local AI runtime",
+        status=CheckStatus.PASS if cuda_devices else CheckStatus.WARN,
+        summary=(
+            f"faster-whisper {faster_whisper.__version__} / "
+            f"CTranslate2 {ctranslate2.__version__} / "
+            f"{cuda_devices} CUDA device(s)"
+        ),
+        details={
+            "cuda_device_count": cuda_devices,
+            "cuda_compute_types": (
+                sorted(ctranslate2.get_supported_compute_types("cuda"))
+                if cuda_devices
+                else []
+            ),
+            "nvidia_dll_directories": [str(path) for path in dll_directories],
         },
     )
 
@@ -312,7 +372,9 @@ def collect_diagnostics(paths: AppPaths) -> DiagnosticReport:
         _safe_probe("Processor", _check_cpu),
         _safe_probe("System memory", _check_memory),
         _safe_probe("NVIDIA GPU", _check_nvidia_gpu),
-        _safe_probe("FFmpeg", _check_ffmpeg),
+        _safe_probe("Local AI runtime", _check_local_ai),
+        _safe_probe("FFmpeg", lambda: _check_ffmpeg(paths)),
+        _safe_probe("Twitch downloader", lambda: _check_yt_dlp(paths)),
         _safe_probe("SQLite", _check_sqlite),
         _safe_probe("Runtime storage", lambda: _check_storage(paths)),
     )
@@ -321,4 +383,3 @@ def collect_diagnostics(paths: AppPaths) -> DiagnosticReport:
         started_at=started_at,
         completed_at=datetime.now(UTC),
     )
-

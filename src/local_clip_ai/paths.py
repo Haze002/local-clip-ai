@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 DATA_DIR_ENVIRONMENT_VARIABLE = "LOCAL_CLIP_AI_DATA_DIR"
@@ -12,10 +12,13 @@ class AppPaths:
     root: Path
     database: Path
     artifacts: Path
+    downloads: Path
     exports: Path
     logs: Path
     models: Path
     temporary: Path
+    tools: Path
+    transcripts: Path
 
     @classmethod
     def from_root(cls, root: Path | str) -> AppPaths:
@@ -24,10 +27,13 @@ class AppPaths:
             root=resolved_root,
             database=resolved_root / "jobs.sqlite3",
             artifacts=resolved_root / "artifacts",
+            downloads=resolved_root / "downloads",
             exports=resolved_root / "exports",
             logs=resolved_root / "logs",
             models=resolved_root / "models",
             temporary=resolved_root / "temp",
+            tools=resolved_root / "tools",
+            transcripts=resolved_root / "transcripts",
         )
 
     @classmethod
@@ -45,14 +51,23 @@ class AppPaths:
 
         return cls.from_root(Path.home() / ".local-clip-ai")
 
+    def with_downloads(self, directory: Path | str) -> AppPaths:
+        """Return these runtime paths with only the media download root changed."""
+        return replace(
+            self,
+            downloads=Path(directory).expanduser().resolve(),
+        )
+
     def ensure_directories(self) -> None:
         for directory in (
             self.root,
             self.artifacts,
+            self.downloads,
             self.exports,
             self.logs,
             self.models,
             self.temporary,
+            self.tools,
+            self.transcripts,
         ):
             directory.mkdir(parents=True, exist_ok=True)
-

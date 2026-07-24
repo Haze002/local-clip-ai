@@ -1,0 +1,69 @@
+{
+  "schema_version": 1,
+  "description": "User-supplied positive highlight ranges. No media or private data is stored here.",
+  "vods": [
+    {
+      "video_id": "2816862211",
+      "url": "https://www.twitch.tv/videos/2816862211",
+      "moments": [
+        {
+          "start": "03:00:05",
+          "end": "03:00:40",
+          "start_seconds": 10805,
+          "end_seconds": 10840,
+          "duration_seconds": 35,
+          "expectation": "highlight"
+        },
+        {
+          "start": "03:02:00",
+          "end": "03:02:30",
+          "start_seconds": 10920,
+          "end_seconds": 10950,
+          "duration_seconds": 30,
+          "expectation": "highlight"
+        }
+      ]
+    },
+    {
+      "video_id": "2823263031",
+      "url": "https://www.twitch.tv/videos/2823263031",
+      "moments": [
+        {
+          "start": "00:14:50",
+          "end": "00:15:20",
+          "start_seconds": 890,
+          "end_seconds": 920,
+          "duration_seconds": 30,
+          "expectation": "highlight"
+        },
+        {
+          "start": "01:27:00",
+          "end": "01:29:30",
+          "start_seconds": 5220,
+          "end_seconds": 5370,
+          "duration_seconds": 150,
+          "expectation": "highlight_requiring_condensation",
+          "target_max_seconds": 60,
+          "require_multiple_source_spans": true
+        },
+        {
+          "start": "01:37:00",
+          "end": "01:37:50",
+          "start_seconds": 5820,
+          "end_seconds": 5870,
+          "duration_seconds": 50,
+          "expectation": "highlight"
+        },
+        {
+          "start": "01:43:50",
+          "end": "01:45:10",
+          "start_seconds": 6230,
+          "end_seconds": 6310,
+          "duration_seconds": 80,
+          "expectation": "highlight_requiring_condensation",
+          "target_max_seconds": 60
+        }
+      ]
+    }
+  ]
+}
