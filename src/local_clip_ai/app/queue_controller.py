@@ -102,6 +102,7 @@ class QueueController(QObject):
     sourceInspected = Signal(str, object)
     pipelineEvent = Signal(str)
     pipelineFinished = Signal(int)
+    jobsCompleted = Signal(object)
 
     def __init__(
         self,
@@ -307,12 +308,27 @@ class QueueController(QObject):
         threading.Thread(target=self._run_pipeline, name="pipeline-runner", daemon=True).start()
 
     def _run_pipeline(self) -> None:
-        runner = PipelineRunner(
-            self._paths,
-            self._database,
-            on_event=self.pipelineEvent.emit,
-        )
-        completed = runner.run_all()
+        completed_job_ids: list[str] = []
+        try:
+            configured_download_directory = str(
+                self._database.get_setting(
+                    "downloads.directory",
+                    str(self._paths.downloads),
+                )
+            )
+            runner_paths = self._paths.with_downloads(configured_download_directory)
+            runner_paths.ensure_directories()
+            runner = PipelineRunner(
+                runner_paths,
+                self._database,
+                on_event=self.pipelineEvent.emit,
+                on_job_completed=completed_job_ids.append,
+            )
+            completed = runner.run_all()
+        except Exception as error:
+            self.pipelineEvent.emit(f"Analysis failed before queue start: {error}")
+            completed = -1
+        self.jobsCompleted.emit(completed_job_ids)
         self.pipelineFinished.emit(completed)
 
     @Slot(str)
@@ -325,5 +341,7 @@ class QueueController(QObject):
         self._running = False
         self.runningChanged.emit()
         self.refresh()
+        if completed < 0:
+            return
         if completed == 0:
             self._set_notice("No queued or interrupted jobs were ready to run.", False)

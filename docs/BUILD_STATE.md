@@ -268,6 +268,36 @@ Update it whenever a milestone is completed or a material blocker changes.
   generated checksum matches SHA-256:
   `07d779ed19d8444faafe0ac1a026db2b20cdf62c2f8a69767111496cbb37328d`.
 
+### Milestone 11 - Automatic clip handoff and independent media storage
+
+- The empty custom export folder was diagnosed against the live local database:
+  the latest VOD completed analysis and created 50 candidates, but no export action
+  had run. The three previous completed clips remain present in their original
+  `%LOCALAPPDATA%\LocalClipAI\exports` location; changing the export setting never
+  moved or deleted them.
+- Results now opens the newest VOD group by default and shows an explicit
+  **Export auto (N)** action. It serially exports every unexported auto-preselected
+  candidate, reports batch progress/failures, supports cancellation between safe
+  boundaries, and preserves individual re-export.
+- Automatic export is enabled by default for future queue passes and begins only
+  after all queued analysis jobs finish, avoiding simultaneous AI analysis and
+  source-quality encoding/download work. It can be disabled persistently in Settings.
+- Finished MP4 output and Twitch download/cache media now have separate persistent
+  folder settings. The latter redirects future analysis VOD downloads and temporary
+  source-quality clip sections while tools, models, transcripts, database, logs, and
+  durable existing checkpoints remain in the private data root.
+- Changing either directory states that it applies to future files. A **Previous**
+  action resolves completed export records and opens the real folders containing
+  older clips instead of making them appear lost.
+- Version 0.2.1 passes Ruff and the complete hardware-independent suite:
+  74 tests plus 2 parameterized subtests, including batch-export sequencing,
+  settings persistence, path isolation, pipeline completion notification, and a
+  real QML window load.
+- The final v0.2.1 ZIP is 1,781,429,341 bytes. Its packaged version probe returned
+  `0.2.1` with empty stderr, the clean-runtime diagnostics and Qt playback gate
+  passed, and the generated checksum matches SHA-256:
+  `e62718fa706ac1c23db8b61bcf636932868b0dd20ca9206c14df13360051029e`.
+
 ### Calibration tooling
 
 - Added a machine-readable evaluator for the six user-labeled Twitch moments. It reports

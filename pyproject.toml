@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "local-clip-ai"
-version = "0.2.0"
+version = "0.2.1"
 description = "Native Windows application for private, local VOD analysis and clip discovery."
 readme = "README.md"
 requires-python = ">=3.12,<3.13"

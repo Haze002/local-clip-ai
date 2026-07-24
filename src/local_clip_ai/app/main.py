@@ -67,6 +67,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             f"Queue pass finished after processing {count} job(s).",
         )
     )
+    queue_controller.jobsCompleted.connect(results_controller.handleJobsCompleted)
     results_controller.exportFinished.connect(
         lambda value, failed: tray_controller.notify(
             "Local Clip AI export",

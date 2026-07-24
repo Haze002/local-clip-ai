@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 DATA_DIR_ENVIRONMENT_VARIABLE = "LOCAL_CLIP_AI_DATA_DIR"
@@ -50,6 +50,13 @@ class AppPaths:
             return cls.from_root(Path(local_app_data) / "LocalClipAI")
 
         return cls.from_root(Path.home() / ".local-clip-ai")
+
+    def with_downloads(self, directory: Path | str) -> AppPaths:
+        """Return these runtime paths with only the media download root changed."""
+        return replace(
+            self,
+            downloads=Path(directory).expanduser().resolve(),
+        )
 
     def ensure_directories(self) -> None:
         for directory in (

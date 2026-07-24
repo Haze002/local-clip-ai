@@ -52,6 +52,7 @@ class PipelineRunnerTests(unittest.TestCase):
             sample_rate=48000,
         )
         worker_commands: list[list[str]] = []
+        completed_jobs: list[str] = []
 
         def fake_worker(command: list[str], **_: object) -> tuple[int, list[str]]:
             worker_commands.append(command)
@@ -91,7 +92,11 @@ class PipelineRunnerTests(unittest.TestCase):
             ),
             patch.object(sys, "frozen", True, create=True),
         ):
-            PipelineRunner(self.paths, self.database).run_job(job_id)
+            PipelineRunner(
+                self.paths,
+                self.database,
+                on_job_completed=completed_jobs.append,
+            ).run_job(job_id)
 
         job = self.database.get_job(job_id)
         self.assertEqual(job["status"], "completed")
@@ -102,6 +107,7 @@ class PipelineRunnerTests(unittest.TestCase):
         )
         self.assertGreaterEqual(len(self.database.list_candidates(job_id)), 1)
         self.assertEqual(worker_commands[0][1], "--worker-cli")
+        self.assertEqual(completed_jobs, [job_id])
 
     def test_preexisting_cancel_request_preserves_unstarted_stages(self) -> None:
         job_id = self._job()

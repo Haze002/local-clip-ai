@@ -43,11 +43,11 @@ ApplicationWindow {
         return Number(value).toFixed(decimals) + suffix
     }
 
-    function toggleResultGroup(key) {
+    function toggleResultGroup(key, currentValue) {
         var updated = {}
         for (var existingKey in resultGroupOpen)
             updated[existingKey] = resultGroupOpen[existingKey]
-        updated[key] = resultGroupOpen[key] !== true
+        updated[key] = !currentValue
         resultGroupOpen = updated
     }
 
@@ -643,8 +643,12 @@ ApplicationWindow {
                                 required property string candidateGroupSubtitle
                                 required property bool candidateGroupFirst
                                 required property int candidateGroupCount
+                                required property bool candidateGroupDefaultOpen
+                                required property int candidateGroupPreselectedCount
                                 property bool groupOpen:
-                                    window.resultGroupOpen[candidateGroupKey] === true
+                                    window.resultGroupOpen[candidateGroupKey] === undefined
+                                    ? candidateGroupDefaultOpen
+                                    : window.resultGroupOpen[candidateGroupKey] === true
                                 visible: candidateGroupFirst || groupOpen
                                 width: parent.width
                                 height: visible
@@ -701,16 +705,29 @@ ApplicationWindow {
                                                 }
                                             }
                                             Label {
-                                                text: candidateGroupCount + " clip"
-                                                      + (candidateGroupCount === 1 ? "" : "s")
+                                                text: candidateGroupCount + " found  /  "
+                                                      + candidateGroupPreselectedCount
+                                                      + " ready"
                                                 color: "#8fb9f5"
                                                 font.pixelSize: 11
                                             }
-                                        }
-                                        MouseArea {
-                                            anchors.fill: parent
-                                            cursorShape: Qt.PointingHandCursor
-                                            onClicked: window.toggleResultGroup(candidateGroupKey)
+                                            Button {
+                                                text: groupOpen ? "Hide" : "Open"
+                                                onClicked: window.toggleResultGroup(
+                                                    candidateGroupKey,
+                                                    groupOpen
+                                                )
+                                            }
+                                            Button {
+                                                text: "Export auto ("
+                                                      + candidateGroupPreselectedCount + ")"
+                                                enabled: candidateGroupPreselectedCount > 0
+                                                         && !resultsController.exporting
+                                                         && !resultsController.previewing
+                                                onClicked: resultsController.exportPreselected(
+                                                    candidateJobId
+                                                )
+                                            }
                                         }
                                     }
 
@@ -1404,10 +1421,15 @@ ApplicationWindow {
                         Label {
                             Layout.fillWidth: true
                             wrapMode: Text.WordWrap
-                            text: "Exports use source-quality Twitch sections and are grouped "
-                                  + "into one named folder per VOD. Preview files use up to "
-                                  + "720p for responsive review."
+                            text: "The export folder contains finished MP4 clips. The separate "
+                                  + "download/cache folder holds Twitch analysis media and "
+                                  + "temporary source sections."
                             color: "#9aa5b6"
+                        }
+                        CheckBox {
+                            text: "Automatically export auto-selected clips after the full queue finishes"
+                            checked: resultsController.autoExportPreselected
+                            onClicked: resultsController.setAutoExportPreselected(checked)
                         }
                         RowLayout {
                             Layout.fillWidth: true
@@ -1444,14 +1466,45 @@ ApplicationWindow {
                                 onClicked: resultsController.openExportDirectory()
                             }
                             Button {
+                                text: "Previous"
+                                onClicked:
+                                    resultsController.openPreviousExportDirectories()
+                            }
+                            Button {
                                 text: "Reset"
                                 onClicked: resultsController.resetExportDirectory()
                             }
                         }
+                        RowLayout {
+                            Layout.fillWidth: true
+                            Label {
+                                text: "Download/cache folder"
+                                color: "#aab3c2"
+                            }
+                            TextField {
+                                Layout.fillWidth: true
+                                text: resultsController.downloadDirectory
+                                readOnly: true
+                                selectByMouse: true
+                            }
+                            Button {
+                                text: "Browse"
+                                onClicked: resultsController.chooseDownloadDirectory()
+                            }
+                            Button {
+                                text: "Open"
+                                onClicked: resultsController.openDownloadDirectory()
+                            }
+                            Button {
+                                text: "Reset"
+                                onClicked: resultsController.resetDownloadDirectory()
+                            }
+                        }
                         Label {
                             Layout.fillWidth: true
-                            text: "Source keeps the original dimensions. Other choices only "
-                                  + "downscale when necessary and never stretch a lower-resolution VOD."
+                            text: "Source keeps original dimensions; other choices only downscale. "
+                                  + "Folder changes affect future files. Use Previous to open "
+                                  + "completed clips saved under earlier export locations."
                             color: "#657188"
                             font.pixelSize: 11
                             wrapMode: Text.WordWrap

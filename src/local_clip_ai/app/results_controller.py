@@ -12,6 +12,7 @@ from PySide6.QtCore import (
     QModelIndex,
     QObject,
     Qt,
+    QTimer,
     QUrl,
     Signal,
     Slot,
@@ -112,6 +113,8 @@ class CandidateListModel(QAbstractListModel):
     GroupSubtitleRole = Qt.ItemDataRole.UserRole + 14
     GroupFirstRole = Qt.ItemDataRole.UserRole + 15
     GroupCountRole = Qt.ItemDataRole.UserRole + 16
+    GroupDefaultOpenRole = Qt.ItemDataRole.UserRole + 17
+    GroupPreselectedCountRole = Qt.ItemDataRole.UserRole + 18
 
     def __init__(self, parent: QObject | None = None):
         super().__init__(parent)
@@ -135,6 +138,10 @@ class CandidateListModel(QAbstractListModel):
             self.GroupSubtitleRole: QByteArray(b"candidateGroupSubtitle"),
             self.GroupFirstRole: QByteArray(b"candidateGroupFirst"),
             self.GroupCountRole: QByteArray(b"candidateGroupCount"),
+            self.GroupDefaultOpenRole: QByteArray(b"candidateGroupDefaultOpen"),
+            self.GroupPreselectedCountRole: QByteArray(
+                b"candidateGroupPreselectedCount"
+            ),
         }
 
     def rowCount(self, parent: QModelIndex = INVALID_MODEL_INDEX) -> int:
@@ -165,6 +172,8 @@ class CandidateListModel(QAbstractListModel):
             self.GroupSubtitleRole: candidate["group_subtitle"],
             self.GroupFirstRole: candidate["group_first"],
             self.GroupCountRole: candidate["group_count"],
+            self.GroupDefaultOpenRole: candidate["group_default_open"],
+            self.GroupPreselectedCountRole: candidate["group_preselected_count"],
         }
         return values.get(role)
 
@@ -181,6 +190,7 @@ class ResultsController(QObject):
     progressChanged = Signal()
     settingsChanged = Signal()
     exportFinished = Signal(str, bool)
+    exportWorkerFinished = Signal(str, bool)
     previewReady = Signal(str, bool)
 
     def __init__(
@@ -210,8 +220,23 @@ class ResultsController(QObject):
             database.get_setting("export.directory", str(paths.exports))
         )
         self._export_directory = Path(configured_export_directory).expanduser().resolve()
+        configured_download_directory = str(
+            database.get_setting("downloads.directory", str(paths.downloads))
+        )
+        self._download_directory = (
+            Path(configured_download_directory).expanduser().resolve()
+        )
+        self._auto_export_preselected = bool(
+            database.get_setting("export.auto_preselected", True)
+        )
         self._cancel_event = threading.Event()
-        self.exportFinished.connect(self._export_finished)
+        self._batch_active = False
+        self._batch_pending: list[str] = []
+        self._batch_total = 0
+        self._batch_successes = 0
+        self._batch_failures: list[str] = []
+        self._pending_auto_export_jobs: list[str] = []
+        self.exportWorkerFinished.connect(self._export_finished)
         self.previewReady.connect(self._preview_ready)
         self.refresh()
 
@@ -251,6 +276,14 @@ class ResultsController(QObject):
     def exportDirectory(self) -> str:
         return str(self._export_directory)
 
+    @Property(str, notify=settingsChanged)
+    def downloadDirectory(self) -> str:
+        return str(self._download_directory)
+
+    @Property(bool, notify=settingsChanged)
+    def autoExportPreselected(self) -> bool:
+        return self._auto_export_preselected
+
     def _set_progress(self, value: float) -> None:
         self._progress = max(0.0, min(1.0, value))
         self.progressChanged.emit()
@@ -263,6 +296,7 @@ class ResultsController(QObject):
     @Slot()
     def refresh(self) -> None:
         candidates: list[dict[str, Any]] = []
+        newest_group_assigned = False
         for job in reversed(self._database.list_jobs()):
             group_candidates = self._database.list_candidates(str(job["id"]))
             group_candidates.sort(
@@ -277,6 +311,12 @@ class ResultsController(QObject):
                 f"{channel}  /  {job['source_uri']}" if channel else str(job["source_uri"])
             )
             group_count = len(group_candidates)
+            group_default_open = group_count > 0 and not newest_group_assigned
+            group_preselected_count = sum(
+                bool(item["metadata"].get("auto_preselected"))
+                and item["review_status"] not in {"exported", "rejected"}
+                for item in group_candidates
+            )
             for index, candidate in enumerate(group_candidates):
                 candidate["source_uri"] = job["source_uri"]
                 candidate["group_key"] = str(job["id"])
@@ -284,7 +324,10 @@ class ResultsController(QObject):
                 candidate["group_subtitle"] = group_subtitle
                 candidate["group_first"] = index == 0
                 candidate["group_count"] = group_count
+                candidate["group_default_open"] = group_default_open
+                candidate["group_preselected_count"] = group_preselected_count
                 candidates.append(candidate)
+            newest_group_assigned = newest_group_assigned or group_default_open
         self._model.replace(candidates)
 
     @Slot(str)
@@ -306,17 +349,25 @@ class ResultsController(QObject):
     @Slot(str)
     def setExportDirectory(self, value: str) -> None:
         try:
-            directory = Path(value).expanduser().resolve()
-            directory.mkdir(parents=True, exist_ok=True)
-            if not directory.is_dir():
-                raise OSError(f"Not a directory: {directory}")
+            directory = self._validated_directory(value)
         except OSError as error:
             self._set_notice(f"Could not use export folder: {error}", True)
             return
         self._export_directory = directory
         self._database.set_setting("export.directory", str(directory))
         self.settingsChanged.emit()
-        self._set_notice(f"Export folder changed to {directory}.")
+        self._set_notice(
+            f"New clips will export to {directory}. Existing clips remain in their "
+            "original folders."
+        )
+
+    @staticmethod
+    def _validated_directory(value: str) -> Path:
+        directory = Path(value).expanduser().resolve()
+        directory.mkdir(parents=True, exist_ok=True)
+        if not directory.is_dir():
+            raise OSError(f"Not a directory: {directory}")
+        return directory
 
     @Slot()
     def chooseExportDirectory(self) -> None:
@@ -337,6 +388,71 @@ class ResultsController(QObject):
         self._export_directory.mkdir(parents=True, exist_ok=True)
         QDesktopServices.openUrl(QUrl.fromLocalFile(str(self._export_directory)))
 
+    @Slot()
+    def openPreviousExportDirectories(self) -> None:
+        directories: list[Path] = []
+        for export in self._database.list_exports():
+            path = Path(str(export["local_path"])).expanduser().resolve()
+            directory = path.parent
+            if path.is_file() and directory not in directories:
+                directories.append(directory)
+        if not directories:
+            self._set_notice("No completed clip files were found in earlier locations.")
+            return
+        for directory in directories[:5]:
+            QDesktopServices.openUrl(QUrl.fromLocalFile(str(directory)))
+        self._set_notice(
+            f"Opened {min(len(directories), 5)} folder(s) containing earlier clips."
+        )
+
+    @Slot(str)
+    def setDownloadDirectory(self, value: str) -> None:
+        try:
+            directory = self._validated_directory(value)
+        except OSError as error:
+            self._set_notice(f"Could not use download/cache folder: {error}", True)
+            return
+        self._download_directory = directory
+        self._database.set_setting("downloads.directory", str(directory))
+        self.settingsChanged.emit()
+        self._set_notice(
+            f"Future Twitch downloads and clip source sections will use {directory}. "
+            "Existing checkpoints remain where they were created."
+        )
+
+    @Slot()
+    def chooseDownloadDirectory(self) -> None:
+        selected = QFileDialog.getExistingDirectory(
+            None,
+            "Choose Local Clip AI download and cache folder",
+            str(self._download_directory),
+        )
+        if selected:
+            self.setDownloadDirectory(selected)
+
+    @Slot()
+    def resetDownloadDirectory(self) -> None:
+        self.setDownloadDirectory(str(self._paths.downloads))
+
+    @Slot()
+    def openDownloadDirectory(self) -> None:
+        self._download_directory.mkdir(parents=True, exist_ok=True)
+        QDesktopServices.openUrl(QUrl.fromLocalFile(str(self._download_directory)))
+
+    @Slot(bool)
+    def setAutoExportPreselected(self, enabled: bool) -> None:
+        value = bool(enabled)
+        if value == self._auto_export_preselected:
+            return
+        self._auto_export_preselected = value
+        self._database.set_setting("export.auto_preselected", value)
+        self.settingsChanged.emit()
+        self._set_notice(
+            "Auto-export after queue analysis is enabled."
+            if value
+            else "Auto-export is disabled; candidates will wait for manual export."
+        )
+
     @Slot(str, str)
     def review(self, candidate_id: str, status: str) -> None:
         try:
@@ -352,6 +468,7 @@ class ResultsController(QObject):
     def exportCandidate(self, candidate_id: str) -> None:
         if self._exporting or self._previewing:
             return
+        self._batch_active = False
         self._cancel_event = threading.Event()
         self._set_progress(0)
         self._exporting = True
@@ -361,6 +478,56 @@ class ResultsController(QObject):
             target=self._export_candidate,
             args=(candidate_id,),
             name=f"export-{candidate_id[:8]}",
+            daemon=True,
+        ).start()
+
+    @Slot(str)
+    def exportPreselected(self, job_id: str) -> None:
+        if self._exporting or self._previewing:
+            self._set_notice(
+                "Another preview or export is active. This export request will wait."
+            )
+            if job_id not in self._pending_auto_export_jobs:
+                self._pending_auto_export_jobs.append(job_id)
+            return
+        candidate_ids = [
+            str(candidate["id"])
+            for candidate in self._database.list_candidates(job_id)
+            if candidate["metadata"].get("auto_preselected")
+            and candidate["review_status"] not in {"exported", "rejected"}
+        ]
+        if not candidate_ids:
+            self._set_notice(
+                "This VOD has no unexported auto-selected clips. Individual candidates "
+                "can still be exported again."
+            )
+            self._maybe_start_pending_auto_export()
+            return
+        self._batch_active = True
+        self._batch_pending = candidate_ids
+        self._batch_total = len(candidate_ids)
+        self._batch_successes = 0
+        self._batch_failures = []
+        self._cancel_event = threading.Event()
+        self._set_progress(0)
+        self._exporting = True
+        self.exportingChanged.emit()
+        self._start_next_batch_export()
+
+    def _start_next_batch_export(self) -> None:
+        if not self._batch_pending:
+            self._finish_batch_export()
+            return
+        candidate_id = self._batch_pending.pop(0)
+        position = self._batch_total - len(self._batch_pending)
+        self._set_progress(0)
+        self._set_notice(
+            f"Exporting auto-selected clip {position} of {self._batch_total}..."
+        )
+        threading.Thread(
+            target=self._export_candidate,
+            args=(candidate_id,),
+            name=f"batch-export-{candidate_id[:8]}",
             daemon=True,
         ).start()
 
@@ -419,18 +586,33 @@ class ResultsController(QObject):
             )
             self._database.finish_export(export_id)
             self._database.set_candidate_review_status(candidate_id, "exported")
-            self.exportFinished.emit(str(result.path), False)
+            self.exportWorkerFinished.emit(str(result.path), False)
         except AcquisitionCancelled:
             if export_id:
                 self._database.finish_export(export_id, error="Cancelled by user")
-            self.exportFinished.emit("__cancelled__", False)
+            self.exportWorkerFinished.emit("__cancelled__", False)
         except Exception as error:
             if export_id:
                 self._database.finish_export(export_id, error=str(error))
-            self.exportFinished.emit(str(error), True)
+            self.exportWorkerFinished.emit(str(error), True)
 
     @Slot(str, bool)
     def _export_finished(self, value: str, failed: bool) -> None:
+        if self._batch_active:
+            if value == "__cancelled__":
+                self._batch_pending = []
+                self._finish_batch_export(cancelled=True)
+                return
+            if failed:
+                self._batch_failures.append(value)
+            else:
+                self._batch_successes += 1
+                self.refresh()
+            if self._batch_pending:
+                self._start_next_batch_export()
+            else:
+                self._finish_batch_export()
+            return
         self._exporting = False
         self._set_progress(0)
         self.exportingChanged.emit()
@@ -441,6 +623,64 @@ class ResultsController(QObject):
         else:
             self._set_notice(f"Export complete: {value}")
             self.refresh()
+        self.exportFinished.emit(value, failed)
+        self._maybe_start_pending_auto_export()
+
+    def _finish_batch_export(self, *, cancelled: bool = False) -> None:
+        total = self._batch_total
+        successes = self._batch_successes
+        failures = len(self._batch_failures)
+        self._batch_active = False
+        self._batch_pending = []
+        self._batch_total = 0
+        self._exporting = False
+        self._set_progress(0)
+        self.exportingChanged.emit()
+        self.refresh()
+        if cancelled:
+            self._set_notice(
+                f"Batch export cancelled after saving {successes} of {total} clips."
+            )
+            self.exportFinished.emit("__cancelled__", False)
+        elif failures and not successes:
+            detail = self._batch_failures[0]
+            self._set_notice(
+                f"All {failures} auto-selected clip exports failed: {detail}",
+                True,
+            )
+            self.exportFinished.emit(
+                f"All {failures} auto-selected exports failed: {detail}",
+                True,
+            )
+        else:
+            message = (
+                f"Exported {successes} auto-selected clip(s) to "
+                f"{self._export_directory}"
+            )
+            if failures:
+                message += f"; {failures} failed"
+            self._set_notice(message, failures > 0)
+            self.exportFinished.emit(message, False)
+        self._batch_failures = []
+        self._batch_successes = 0
+        self._maybe_start_pending_auto_export()
+
+    @Slot(object)
+    def handleJobsCompleted(self, job_ids: object) -> None:
+        self.refresh()
+        if not self._auto_export_preselected:
+            return
+        for job_id in list(job_ids) if job_ids else []:
+            value = str(job_id)
+            if value not in self._pending_auto_export_jobs:
+                self._pending_auto_export_jobs.append(value)
+        self._maybe_start_pending_auto_export()
+
+    def _maybe_start_pending_auto_export(self) -> None:
+        if self._exporting or self._previewing or not self._pending_auto_export_jobs:
+            return
+        job_id = self._pending_auto_export_jobs.pop(0)
+        QTimer.singleShot(0, lambda: self.exportPreselected(job_id))
 
     @Slot(str)
     def previewCandidate(self, candidate_id: str) -> None:
@@ -509,6 +749,7 @@ class ResultsController(QObject):
             self._preview_source = QUrl.fromLocalFile(value)
             self._set_notice("Preview ready. Use the player before selecting or exporting.")
         self.previewChanged.emit()
+        self._maybe_start_pending_auto_export()
 
     @Slot(str)
     def previewPlaybackFailed(self, message: str) -> None:
@@ -578,7 +819,9 @@ class ResultsController(QObject):
             self._paths,
             str(job["source_uri"]),
             source_range,
-            destination=self._paths.artifacts / str(job["id"]) / "export-source",
+            destination=(
+                self._download_directory / "clip-sources" / str(job["id"])
+            ),
             max_height=max_height,
             cancel_requested=self._cancel_event.is_set,
             on_output=output,

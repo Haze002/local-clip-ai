@@ -16,7 +16,7 @@ This project is not affiliated with StreamLadder or ClipGPT.
 1. Drag local Streamlabs recordings or supported VOD links into the application.
 2. Queue one or more VODs with reusable content and analysis profiles.
 3. Run Quick, Balanced, or Deep analysis locally.
-4. Review time-coded candidate moments and export selected clips.
+4. Review time-coded candidate moments, or automatically export the preselected clips.
 5. Resume safely after cancellation, overheating, or a Windows restart.
 
 ## Development setup
@@ -73,8 +73,9 @@ and Twitch connection details.
 - About 2 GiB for repository-local NVIDIA runtime packages and the Quick model
 
 AI model files, VODs, transcripts, databases, exports, logs, and credentials are
-excluded from Git. Runtime data defaults to `%LOCALAPPDATA%\LocalClipAI`, and a
-different directory can be selected with `--data-dir` or
+excluded from Git. Runtime data defaults to `%LOCALAPPDATA%\LocalClipAI`. The
+native Settings page can independently redirect finished clips and downloaded
+Twitch/cache media; the full root can also be selected with `--data-dir` or
 `LOCAL_CLIP_AI_DATA_DIR`.
 
 Install or repair the verified portable media tools without changing Windows:

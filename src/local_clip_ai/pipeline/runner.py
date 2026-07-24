@@ -33,6 +33,7 @@ from local_clip_ai.sources.acquisition import run_cancellable_process
 from local_clip_ai.storage import JobDatabase
 
 EventCallback = Callable[[str], None]
+JobCompletedCallback = Callable[[str], None]
 DOWNLOAD_PERCENT = re.compile(r"\[download\]\s+(\d+(?:\.\d+)?)%")
 
 
@@ -51,10 +52,12 @@ class PipelineRunner:
         database: JobDatabase,
         *,
         on_event: EventCallback | None = None,
+        on_job_completed: JobCompletedCallback | None = None,
     ):
         self.paths = paths
         self.database = database
         self.on_event = on_event
+        self.on_job_completed = on_job_completed
 
     def _emit(self, message: str) -> None:
         if self.on_event:
@@ -666,6 +669,8 @@ class PipelineRunner:
             count = self._discover_candidates(job, transcript_path, media_path)
             self.database.update_job_status(job_id, "completed", progress=1)
             self._emit(f"Analysis complete with {count} candidate(s).")
+            if self.on_job_completed:
+                self.on_job_completed(job_id)
         except AcquisitionCancelled:
             self._handle_stop(job_id)
         except Exception as error:

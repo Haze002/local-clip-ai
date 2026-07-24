@@ -25,12 +25,13 @@ packaged beta. A current NVIDIA display driver is required for GPU acceleration.
    preference, analysis mode, or both.
 3. Start the queue. The app prevents Windows sleep while the queue is active.
    Download, transcription, audio, and scene stages report incremental progress.
-4. Open a VOD-named folder on the Results page and review its candidates.
+4. The newest VOD opens automatically on the Results page. Review its candidates.
    **Preview** downloads a source section at up to 720p, builds the exact proposed
    multi-span cut, and starts playback automatically.
-5. Mark candidates selected/rejected and export the ones you want. Settings lets
-   you choose the export folder and a maximum of Source, 1080p, 720p, or 480p.
-   Exported clips are stored below a `VOD title [Twitch ID]` folder.
+5. Select **Export auto** on a VOD to export every unexported preselected candidate,
+   or export candidates individually. By default the app performs this batch export
+   after the full queue finishes; Settings can disable it. Finished clips are stored
+   below a `VOD title [Twitch ID]` folder.
 
 Quick uses local Whisper small, audio peaks, and semantic preference matching.
 Balanced uses Whisper large-v3-turbo plus scene activity. Deep adds denser scene
@@ -60,6 +61,14 @@ This directory contains tools, models, VOD media, transcripts, the SQLite queue,
 logs, previews, and exports. None of it is uploaded to the Local Clip AI GitHub
 repository. AI inference runs on the local computer; network access is used for
 Twitch media/API requests and first-time tool/model downloads.
+
+Settings exposes two independent locations:
+
+- **Export folder** stores finished MP4 clips. Changing it affects new exports and
+  never moves old clips. **Previous** opens folders containing completed older clips.
+- **Download/cache folder** stores future Twitch analysis downloads and the temporary
+  source-quality sections used for preview/export. Existing durable checkpoints stay
+  in their original locations.
 
 ## Safety and recovery
 
