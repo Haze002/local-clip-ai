@@ -22,6 +22,7 @@ dependencies = [
     "psutil>=6.1,<8",
     "nvidia-ml-py>=12.560,<14",
     "keyring>=25,<27",
+    "fastembed>=0.8,<1",
 ]
 
 [project.optional-dependencies]

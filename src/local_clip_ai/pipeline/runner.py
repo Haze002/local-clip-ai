@@ -13,8 +13,11 @@ from local_clip_ai.analysis import (
     TranscriptSegment,
     discover_candidates,
     extract_audio_evidence,
+    extract_semantic_evidence,
+    extract_visual_evidence,
     merge_transcript_documents,
     plan_transcription_chunks,
+    rerank_candidates_with_vision,
 )
 from local_clip_ai.config import ContentProfile
 from local_clip_ai.media import probe_media
@@ -329,7 +332,12 @@ class PipelineRunner:
             for segment in values["segments"]
         ]
 
-    def _discover_candidates(self, job: dict[str, Any], transcript_path: Path) -> int:
+    def _discover_candidates(
+        self,
+        job: dict[str, Any],
+        transcript_path: Path,
+        media_path: Path,
+    ) -> int:
         job_id = str(job["id"])
         checkpoint = self.database.stage_checkpoint(job_id, "candidates")
         if checkpoint and checkpoint["status"] == "completed":
@@ -338,12 +346,58 @@ class PipelineRunner:
         content_values = json.loads(str(job["content_profile_json"]))
         profile = ContentProfile(**content_values)
         signals_path = self._completed_artifact(job_id, "signals", "audio_evidence")
-        audio_evidence = self._read_audio_evidence(signals_path) if signals_path else []
+        audio_evidence = self._read_evidence(signals_path) if signals_path else []
+        visual_path = self._completed_artifact(job_id, "signals", "visual_evidence")
+        visual_evidence = self._read_evidence(visual_path) if visual_path else []
+        semantic_path = self._completed_artifact(job_id, "signals", "semantic_evidence")
+        semantic_evidence = self._read_evidence(semantic_path) if semantic_path else []
         moments = discover_candidates(
             self._read_segments(transcript_path),
             profile,
             audio_evidence=audio_evidence,
+            visual_evidence=visual_evidence,
+            semantic_evidence=semantic_evidence,
         )
+        vision_assessments = []
+        if str(job["analysis_mode"]) == "deep" and moments:
+            self._emit("Deep mode: reranking candidate frames with local vision")
+            moments, vision_assessments = rerank_candidates_with_vision(
+                self.paths,
+                media_path,
+                moments,
+                profile.preference,
+                output_directory=self.paths.artifacts / job_id / "vision_frames",
+                auto_preselect_count=profile.auto_preselect_count,
+                cancel_requested=lambda: self._stop_requested(job_id),
+            )
+            vision_path = self.paths.artifacts / job_id / "vision_assessments.json"
+            temporary = vision_path.with_suffix(".json.tmp")
+            temporary.write_text(
+                json.dumps(
+                    [
+                        {
+                            "candidate_index": item.candidate_index,
+                            "score": item.score,
+                            "similarity": item.similarity,
+                            "frame_count": item.frame_count,
+                        }
+                        for item in vision_assessments
+                    ],
+                    indent=2,
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            os.replace(temporary, vision_path)
+            self.database.save_artifact(
+                job_id,
+                "candidates",
+                "vision_assessments",
+                vision_path,
+                complete=True,
+                size_bytes=vision_path.stat().st_size,
+                metadata={"candidate_count": len(vision_assessments)},
+            )
         self.database.clear_candidates(job_id)
         for moment in moments:
             self.database.save_candidate(
@@ -373,7 +427,10 @@ class PipelineRunner:
         self.database.save_stage_checkpoint(
             job_id,
             "candidates",
-            {"candidate_count": len(moments)},
+            {
+                "candidate_count": len(moments),
+                "vision_reranked": bool(vision_assessments),
+            },
             status="completed",
         )
         self._update_stage(job_id, "candidates")
@@ -416,17 +473,10 @@ class PipelineRunner:
             size_bytes=output.stat().st_size,
             metadata={"window_count": len(evidence), "window_seconds": 1},
         )
-        self.database.save_stage_checkpoint(
-            job_id,
-            "signals",
-            {"path": str(output), "window_count": len(evidence)},
-            status="completed",
-        )
-        self._update_stage(job_id, "signals")
         return output
 
     @staticmethod
-    def _read_audio_evidence(path: Path) -> list[EvidenceWindow]:
+    def _read_evidence(path: Path) -> list[EvidenceWindow]:
         values = json.loads(path.read_text(encoding="utf-8"))
         return [
             EvidenceWindow(
@@ -437,6 +487,123 @@ class PipelineRunner:
             )
             for item in values
         ]
+
+    def _analyze_visual(self, job: dict[str, Any], media_path: Path) -> Path | None:
+        mode = str(job["analysis_mode"])
+        if mode == "quick":
+            return None
+        job_id = str(job["id"])
+        existing = self._completed_artifact(job_id, "signals", "visual_evidence")
+        if existing:
+            return existing
+        evidence = extract_visual_evidence(
+            self.paths,
+            media_path,
+            analysis_mode=mode,
+            cancel_requested=lambda: self._stop_requested(job_id),
+        )
+        output = self.paths.artifacts / job_id / "visual_evidence.json"
+        output.parent.mkdir(parents=True, exist_ok=True)
+        temporary = output.with_suffix(".json.tmp")
+        temporary.write_text(
+            json.dumps(
+                [
+                    {
+                        "start_seconds": item.start_seconds,
+                        "end_seconds": item.end_seconds,
+                        "score": item.score,
+                        "rationale": item.rationale,
+                    }
+                    for item in evidence
+                ],
+                ensure_ascii=False,
+                indent=2,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        os.replace(temporary, output)
+        self.database.save_artifact(
+            job_id,
+            "signals",
+            "visual_evidence",
+            output,
+            complete=True,
+            size_bytes=output.stat().st_size,
+            metadata={"window_count": len(evidence), "mode": mode},
+        )
+        return output
+
+    def _analyze_signals(self, job: dict[str, Any], media_path: Path) -> None:
+        job_id = str(job["id"])
+        audio_path = self._analyze_audio(job, media_path)
+        visual_path = self._analyze_visual(job, media_path)
+        transcript_path = self._completed_artifact(
+            job_id,
+            "transcription",
+            "transcript_json",
+        )
+        if transcript_path is None:
+            raise RuntimeError("Semantic analysis requires a completed transcript")
+        semantic_path = self._analyze_semantic(job, transcript_path)
+        self.database.save_stage_checkpoint(
+            job_id,
+            "signals",
+            {
+                "audio_path": str(audio_path),
+                "visual_path": str(visual_path) if visual_path else None,
+                "semantic_path": str(semantic_path),
+                "mode": str(job["analysis_mode"]),
+            },
+            status="completed",
+        )
+        self._update_stage(job_id, "signals")
+
+    def _analyze_semantic(self, job: dict[str, Any], transcript_path: Path) -> Path:
+        job_id = str(job["id"])
+        existing = self._completed_artifact(job_id, "signals", "semantic_evidence")
+        if existing:
+            return existing
+        profile = ContentProfile(**json.loads(str(job["content_profile_json"])))
+        evidence = extract_semantic_evidence(
+            self.paths,
+            self._read_segments(transcript_path),
+            profile.preference,
+        )
+        output = self.paths.artifacts / job_id / "semantic_evidence.json"
+        output.parent.mkdir(parents=True, exist_ok=True)
+        temporary = output.with_suffix(".json.tmp")
+        temporary.write_text(
+            json.dumps(
+                [
+                    {
+                        "start_seconds": item.start_seconds,
+                        "end_seconds": item.end_seconds,
+                        "score": item.score,
+                        "rationale": item.rationale,
+                    }
+                    for item in evidence
+                ],
+                ensure_ascii=False,
+                indent=2,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        os.replace(temporary, output)
+        self.database.save_artifact(
+            job_id,
+            "signals",
+            "semantic_evidence",
+            output,
+            complete=True,
+            size_bytes=output.stat().st_size,
+            metadata={
+                "window_count": len(evidence),
+                "preference": profile.preference,
+            },
+        )
+        return output
 
     def run_job(self, job_id: str) -> None:
         job = self._job(job_id)
@@ -462,12 +629,12 @@ class PipelineRunner:
                 self._handle_stop(job_id)
                 return
             self._emit("Measuring audio energy and reaction peaks")
-            self._analyze_audio(job, media_path)
+            self._analyze_signals(job, media_path)
             if self._stop_requested(job_id):
                 self._handle_stop(job_id)
                 return
             self._emit("Ranking and condensing candidate moments")
-            count = self._discover_candidates(job, transcript_path)
+            count = self._discover_candidates(job, transcript_path, media_path)
             self.database.update_job_status(job_id, "completed", progress=1)
             self._emit(f"Analysis complete with {count} candidate(s).")
         except AcquisitionCancelled:

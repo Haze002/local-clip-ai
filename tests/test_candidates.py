@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import unittest
 
-from local_clip_ai.analysis import discover_candidates
+from local_clip_ai.analysis import EvidenceWindow, discover_candidates
 from local_clip_ai.analysis.transcription import TranscriptSegment
 from local_clip_ai.config import ContentProfile
 
@@ -52,3 +52,15 @@ class CandidateDiscoveryTests(unittest.TestCase):
         self.assertEqual(len(candidates), 1)
         self.assertGreaterEqual(len(candidates[0].condensation.spans), 2)
         self.assertLessEqual(candidates[0].condensation.output_duration_seconds, 45.0001)
+
+    def test_silent_visual_peak_can_create_candidate(self) -> None:
+        candidates = discover_candidates(
+            [],
+            ContentProfile(),
+            visual_evidence=[
+                EvidenceWindow(120, 121, 0.95, "strong scene change"),
+            ],
+        )
+
+        self.assertEqual(len(candidates), 1)
+        self.assertIn("scene", candidates[0].rationale)

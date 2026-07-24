@@ -126,27 +126,27 @@ def transcribe_media(
     model_root = paths.models / "faster-whisper"
     model_root.mkdir(parents=True, exist_ok=True)
     started = time.monotonic()
-    model = WhisperModel(
-        profile.transcription_model,
-        device=selected_device,
-        compute_type=compute_type,
-        download_root=str(model_root),
-    )
-    segments_generator, info = model.transcribe(
-        str(source),
-        language=None if language in {None, "", "auto"} else language,
-        beam_size=profile.beam_size,
-        vad_filter=True,
-        word_timestamps=False,
-        condition_on_previous_text=True,
-        clip_timestamps=(
-            [clip_range.start, clip_range.end]
-            if clip_range is not None
-            else "0"
-        ),
-    )
     segments: list[TranscriptSegment] = []
     try:
+        model = WhisperModel(
+            profile.transcription_model,
+            device=selected_device,
+            compute_type=compute_type,
+            download_root=str(model_root),
+        )
+        segments_generator, info = model.transcribe(
+            str(source),
+            language=None if language in {None, "", "auto"} else language,
+            beam_size=profile.beam_size,
+            vad_filter=True,
+            word_timestamps=False,
+            condition_on_previous_text=True,
+            clip_timestamps=(
+                [clip_range.start, clip_range.end]
+                if clip_range is not None
+                else "0"
+            ),
+        )
         for raw_segment in segments_generator:
             if cancel_requested and cancel_requested():
                 raise TranscriptionCancelled("Transcription cancelled at a segment boundary")
@@ -162,8 +162,23 @@ def transcribe_media(
                 on_segment(segment)
     except RuntimeError as error:
         runtime_error = str(error).lower()
-        missing_cuda_library = "cublas" in runtime_error or "cudnn" in runtime_error
-        if device is None and selected_device == "cuda" and not segments and missing_cuda_library:
+        recoverable_cuda_error = any(
+            marker in runtime_error
+            for marker in (
+                "cublas",
+                "cudnn",
+                "cuda out of memory",
+                "out of memory",
+                "failed to allocate",
+                "allocation failed",
+            )
+        )
+        if (
+            device is None
+            and selected_device == "cuda"
+            and not segments
+            and recoverable_cuda_error
+        ):
             return transcribe_media(
                 paths,
                 source,

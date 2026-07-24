@@ -71,6 +71,18 @@ Update it whenever a milestone is completed or a material blocker changes.
 - Added FFmpeg audio-energy and sudden-rise measurement in one-second windows. Audio
   evidence is persisted as its own reusable artifact and now contributes to candidate
   scoring, including reactions that speech-only analysis could miss.
+- Quick now uses transcript, audio, and local semantic evidence without downloading
+  video frames. Balanced adds one-frame-per-second low-resolution scene-change evidence.
+  Deep samples visual activity twice as densely and performs candidate-only visual
+  reranking.
+- Added the 67 MB `BAAI/bge-small-en-v1.5` FastEmbed model for local semantic matching
+  between editable content preferences and timestamped transcript passages.
+- Added paired local CLIP text/image models for Deep candidate-only visual preference
+  reranking. Only a few frames from the provisional top candidates are embedded; whole
+  VODs are not passed through the heavier visual model.
+- CUDA library/allocation/out-of-memory failures that occur before a chunk produces
+  output automatically retry that chunk on CPU. The fallback is covered by a simulated
+  CUDA OOM test and does not discard previous chunks.
 - Added transcript reaction/content scoring, up-to-three-minute event grouping,
   automatic preselection, and chronological multi-span condensation.
 - Added candidate review and source-quality FFmpeg/NVENC export.
@@ -82,6 +94,10 @@ Update it whenever a milestone is completed or a material blocker changes.
 - Re-ran the complete durable queue after chunking/audio integration: acquisition,
   chunk transcription, atomic merge, audio analysis, and candidate selection all
   completed with their expected local database checkpoints and artifacts.
+- Completed a real Deep-mode end-to-end run on the calibration media using the RTX 5070:
+  Whisper `large-v3-turbo` ran with CUDA float16, five dense visual windows were found,
+  local semantic evidence was saved, CLIP candidate frames were reranked, and the job
+  completed with every expected artifact.
 
 ### Milestone 4 - native workflow and preferences
 
@@ -106,13 +122,11 @@ Update it whenever a milestone is completed or a material blocker changes.
 
 ## Remaining milestones
 
-1. Scene/activity signals plus meaningful Quick/Balanced/Deep differentiation.
-2. Balanced/Deep semantic and candidate-only vision reranking with VRAM fallback.
-3. Preview playback, richer explanations, export progress/cancellation, and queue reorder UI.
-4. Live Twitch device connection test after a public Client ID is entered.
-5. Full calibration against all six supplied moments and long-duration thermal/GPU tests.
-6. Optional reliable CPU sensor provider where Windows exposes no package sensor.
-7. Windows packaging, beta installation docs, final green checkpoints, and PR completion.
+1. Preview playback, richer explanations, export progress/cancellation, and queue reorder UI.
+2. Live Twitch device connection test after a public Client ID is entered.
+3. Full calibration against all six supplied moments and long-duration thermal/GPU tests.
+4. Optional reliable CPU sensor provider where Windows exposes no package sensor.
+5. Windows packaging, beta installation docs, final green checkpoints, and PR completion.
 
 ## Calibration contract
 

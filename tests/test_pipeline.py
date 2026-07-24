@@ -82,6 +82,10 @@ class PipelineRunnerTests(unittest.TestCase):
                 "local_clip_ai.pipeline.runner.extract_audio_evidence",
                 return_value=[EvidenceWindow(40, 41, 0.9, "audio peak")],
             ),
+            patch(
+                "local_clip_ai.pipeline.runner.extract_semantic_evidence",
+                return_value=[],
+            ),
         ):
             PipelineRunner(self.paths, self.database).run_job(job_id)
 

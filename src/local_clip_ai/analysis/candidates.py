@@ -89,9 +89,13 @@ def score_transcript_segments(
     segments: tuple[TranscriptSegment, ...] | list[TranscriptSegment],
     content_profile: ContentProfile,
     audio_evidence: list[EvidenceWindow] | None = None,
+    visual_evidence: list[EvidenceWindow] | None = None,
+    semantic_evidence: list[EvidenceWindow] | None = None,
 ) -> list[EvidenceWindow]:
     preference = _preference_keywords(content_profile.preference)
     audio = audio_evidence or []
+    visual = visual_evidence or []
+    semantic = semantic_evidence or []
     evidence: list[EvidenceWindow] = []
     for segment in segments:
         duration = max(0.5, segment.end_seconds - segment.start_seconds)
@@ -107,12 +111,28 @@ def score_transcript_segments(
             and item.start_seconds < segment.end_seconds
         ]
         audio_score = max(overlapping_audio, default=0.35)
+        overlapping_visual = [
+            item.score
+            for item in visual
+            if item.end_seconds > segment.start_seconds
+            and item.start_seconds < segment.end_seconds
+        ]
+        visual_score = max(overlapping_visual, default=0.2)
+        overlapping_semantic = [
+            item.score
+            for item in semantic
+            if item.end_seconds > segment.start_seconds
+            and item.start_seconds < segment.end_seconds
+        ]
+        semantic_score = max(overlapping_semantic, default=0.2)
         confidence = max(0.0, min(1.0, math.exp(segment.avg_log_probability)))
         score = (
-            reaction * 0.46
-            + speech_density * 0.19
-            + audio_score * 0.2
-            + preference_score * 0.1
+            reaction * 0.38
+            + speech_density * 0.15
+            + audio_score * 0.15
+            + visual_score * 0.08
+            + semantic_score * 0.15
+            + preference_score * 0.04
             + confidence * 0.05
         )
         if speech_density > 0.65:
@@ -121,6 +141,10 @@ def score_transcript_segments(
             reasons.append("audio peak")
         if matched_preferences:
             reasons.append("content preference match")
+        if overlapping_visual and visual_score > 0.6:
+            reasons.append("visual activity")
+        if overlapping_semantic and semantic_score > 0.6:
+            reasons.append("semantic preference match")
         evidence.append(
             EvidenceWindow(
                 start_seconds=segment.start_seconds,
@@ -165,9 +189,50 @@ def discover_candidates(
     content_profile: ContentProfile,
     *,
     audio_evidence: list[EvidenceWindow] | None = None,
+    visual_evidence: list[EvidenceWindow] | None = None,
+    semantic_evidence: list[EvidenceWindow] | None = None,
     score_threshold: float = 0.36,
 ) -> list[CandidateMoment]:
-    evidence = score_transcript_segments(segments, content_profile, audio_evidence)
+    audio = audio_evidence or []
+    visual = visual_evidence or []
+    semantic = semantic_evidence or []
+    evidence = score_transcript_segments(
+        segments,
+        content_profile,
+        audio,
+        visual,
+        semantic,
+    )
+    evidence.extend(
+        EvidenceWindow(
+            item.start_seconds,
+            item.end_seconds,
+            min(1.0, 0.36 + item.score * 0.42),
+            item.rationale,
+        )
+        for item in audio
+        if item.score >= 0.72
+    )
+    evidence.extend(
+        EvidenceWindow(
+            item.start_seconds,
+            item.end_seconds,
+            min(1.0, 0.32 + item.score * 0.48),
+            item.rationale,
+        )
+        for item in visual
+        if item.score >= 0.58
+    )
+    evidence.extend(
+        EvidenceWindow(
+            item.start_seconds,
+            item.end_seconds,
+            min(1.0, 0.3 + item.score * 0.5),
+            item.rationale,
+        )
+        for item in semantic
+        if item.score >= 0.62
+    )
     groups = _group_evidence(
         evidence,
         threshold=score_threshold,
